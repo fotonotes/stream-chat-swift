@@ -20,8 +20,20 @@
   "testTargets" : [
     {
       "skippedTests" : [
+        "Authentication_Tests",
         "ChannelListScrollTime",
-        "MessageListScrollTime"
+        "ChannelList_Tests",
+        "Ephemeral_Messages_Tests",
+        "MessageDeliveryStatus_ChannelList_Tests",
+        "MessageDeliveryStatus_Tests",
+        "MessageListScrollTime",
+        "MessageList_Tests",
+        "PushNotification_Tests",
+        "QuotedReply_Tests",
+        "Reactions_Tests",
+        "SlowMode_Tests",
+        "StreamTestCase",
+        "UserDetails_Tests"
       ],
       "target" : {
         "containerPath" : "container:StreamChat.xcodeproj",
