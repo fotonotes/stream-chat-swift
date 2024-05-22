@@ -108,7 +108,7 @@ open class ChatChannelVC: _ViewController,
     }()
 
     /// The throttler to make sure that the marking read is not spammed.
-    var markReadThrottler: Throttler = Throttler(interval: 3, queue: .main)
+    var markReadThrottler: Throttler = Throttler(interval: 1, queue: .main)
 
     /// Determines if a messaged had been marked as unread in the current session
     private var hasMarkedMessageAsUnread: Bool {
