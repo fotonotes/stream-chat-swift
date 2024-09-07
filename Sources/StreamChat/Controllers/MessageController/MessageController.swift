@@ -145,7 +145,6 @@ public class ChatMessageController: DataController, DelegateCallable, DataStoreP
     /// An internal backing object for all publicly available Combine publishers. We use it to simplify the way we expose
     /// publishers. Instead of creating custom `Publisher` types, we use `CurrentValueSubject` and `PassthroughSubject` internally,
     /// and expose the published values by mapping them to a read-only `AnyPublisher` type.
-    @available(iOS 13, *)
     var basePublishers: BasePublishers {
         if let value = _basePublishers as? BasePublishers {
             return value
@@ -179,10 +178,11 @@ public class ChatMessageController: DataController, DelegateCallable, DataStoreP
 
     /// The observer used to listen replies updates.
     /// It will be reset on `listOrdering` changes.
-    private var repliesObserver: ListDatabaseObserverWrapper<ChatMessage, MessageDTO>?
+    private var repliesObserver: BackgroundListDatabaseObserver<ChatMessage, MessageDTO>?
 
     /// The worker used to fetch the remote data and communicate with servers.
     private let messageUpdater: MessageUpdater
+    private let pollsRepository: PollsRepository
     private let replyPaginationHandler: MessagesPaginationStateHandling
     private var replyPaginationState: MessagesPaginationState { replyPaginationHandler.state }
 
@@ -197,6 +197,7 @@ public class ChatMessageController: DataController, DelegateCallable, DataStoreP
         self.cid = cid
         self.messageId = messageId
         self.replyPaginationHandler = replyPaginationHandler
+        pollsRepository = client.pollsRepository
         self.environment = environment
         messageUpdater = environment.messageUpdaterBuilder(
             client.config.isLocalStorageEnabled,
@@ -718,6 +719,82 @@ public class ChatMessageController: DataController, DelegateCallable, DataStoreP
             }
         }
     }
+
+    /// Marks the thread read if this message is the root of a thread.
+    public func markThreadRead(completion: ((Error?) -> Void)? = nil) {
+        messageUpdater.markThreadRead(cid: cid, threadId: messageId) { error in
+            self.callback {
+                completion?(error)
+            }
+        }
+    }
+
+    /// Marks the thread unread if this message is the root of a thread.
+    public func markThreadUnread(completion: ((Error?) -> Void)? = nil) {
+        messageUpdater.markThreadUnread(
+            cid: cid,
+            threadId: messageId
+        ) { error in
+            self.callback {
+                completion?(error)
+            }
+        }
+    }
+
+    /// Fetches the thread information of the message this controller manages.
+    /// Returns an error in case the message is not the root of a thread.
+    /// - Parameters:
+    ///   - replyLimit: The number of replies fetched.
+    ///   - participantLimit: The number of participants fetches.
+    ///   - completion: Returns the thread information if the message is the root of a thread.
+    public func loadThread(
+        replyLimit: Int? = nil,
+        participantLimit: Int? = nil,
+        completion: @escaping ((Result<ChatThread, Error>) -> Void)
+    ) {
+        var query = ThreadQuery(
+            messageId: messageId,
+            watch: false
+        )
+        if let replyLimit {
+            query.replyLimit = replyLimit
+        }
+        if let participantLimit {
+            query.participantLimit = participantLimit
+        }
+        messageUpdater.loadThread(query: query) { result in
+            self.callback {
+                completion(result)
+            }
+        }
+    }
+
+    /// Updates the thread information of the threat root message this controller manages.
+    /// - Parameters:
+    ///   - title: The title of the thread.
+    ///   - extraData: Custom data to populate the thread.
+    ///   - unsetProperties: Properties from the thread to be cleared/unset.
+    public func updateThread(
+        title: String?,
+        extraData: [String: RawJSON]? = nil,
+        unsetProperties: [String]? = nil,
+        completion: @escaping ((Result<ChatThread, Error>) -> Void)
+    ) {
+        messageUpdater.updateThread(
+            for: messageId,
+            request: .init(
+                set: .init(
+                    title: title,
+                    extraData: extraData
+                ),
+                unset: unsetProperties
+            )
+        ) { result in
+            self.callback {
+                completion(result)
+            }
+        }
+    }
 }
 
 // MARK: - Environment
@@ -725,20 +802,25 @@ public class ChatMessageController: DataController, DelegateCallable, DataStoreP
 extension ChatMessageController {
     struct Environment {
         var messageObserverBuilder: (
-            _ context: NSManagedObjectContext,
-            _ fetchRequest: NSFetchRequest<MessageDTO>,
-            _ itemCreator: @escaping (MessageDTO) throws -> ChatMessage,
-            _ fetchedResultsControllerType: NSFetchedResultsController<MessageDTO>.Type
-        ) -> EntityDatabaseObserver<ChatMessage, MessageDTO> = EntityDatabaseObserver.init
-
-        var repliesObserverBuilder: (
-            _ isBackgroundMappingEnabled: Bool,
             _ database: DatabaseContainer,
             _ fetchRequest: NSFetchRequest<MessageDTO>,
             _ itemCreator: @escaping (MessageDTO) throws -> ChatMessage,
             _ fetchedResultsControllerType: NSFetchedResultsController<MessageDTO>.Type
-        ) -> ListDatabaseObserverWrapper<ChatMessage, MessageDTO> = {
-            .init(isBackground: $0, database: $1, fetchRequest: $2, itemCreator: $3, fetchedResultsControllerType: $4)
+        ) -> BackgroundEntityDatabaseObserver<ChatMessage, MessageDTO> = BackgroundEntityDatabaseObserver.init
+
+        var repliesObserverBuilder: (
+            _ database: DatabaseContainer,
+            _ fetchRequest: NSFetchRequest<MessageDTO>,
+            _ itemCreator: @escaping (MessageDTO) throws -> ChatMessage,
+            _ fetchedResultsControllerType: NSFetchedResultsController<MessageDTO>.Type
+        ) -> BackgroundListDatabaseObserver<ChatMessage, MessageDTO> = {
+            .init(
+                database: $0,
+                fetchRequest: $1,
+                itemCreator: $2,
+                itemReuseKeyPaths: (\ChatMessage.id, \MessageDTO.id),
+                fetchedResultsControllerType: $3
+            )
         }
 
         var messageUpdaterBuilder: (
@@ -753,9 +835,9 @@ extension ChatMessageController {
 // MARK: - Private
 
 private extension ChatMessageController {
-    func createMessageObserver() -> EntityDatabaseObserver<ChatMessage, MessageDTO> {
+    func createMessageObserver() -> BackgroundEntityDatabaseObserver<ChatMessage, MessageDTO> {
         let observer = environment.messageObserverBuilder(
-            client.databaseContainer.viewContext,
+            client.databaseContainer,
             MessageDTO.message(withID: messageId),
             { try $0.asModel() },
             NSFetchedResultsController<MessageDTO>.self
@@ -772,7 +854,6 @@ private extension ChatMessageController {
 
         let pageSize: Int = repliesPageSize
         let observer = environment.repliesObserverBuilder(
-            StreamRuntimeCheck._isBackgroundMappingEnabled,
             client.databaseContainer,
             MessageDTO.repliesFetchRequest(
                 for: messageId,
@@ -845,7 +926,7 @@ public extension ChatMessageController {
 }
 
 extension ClientError {
-    class MessageEmptyReplies: ClientError {
+    final class MessageEmptyReplies: ClientError {
         override public var localizedDescription: String {
             "You can't load previous replies when there is no replies for the message."
         }

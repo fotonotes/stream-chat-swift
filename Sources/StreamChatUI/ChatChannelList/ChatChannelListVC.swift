@@ -27,11 +27,7 @@ open class ChatChannelListVC: _ViewController,
     }
 
     open private(set) lazy var loadingIndicator: UIActivityIndicatorView = {
-        if #available(iOS 13.0, *) {
-            return UIActivityIndicatorView(style: .large).withoutAutoresizingMaskConstraints
-        } else {
-            return UIActivityIndicatorView(style: .whiteLarge).withoutAutoresizingMaskConstraints
-        }
+        UIActivityIndicatorView(style: .large).withoutAutoresizingMaskConstraints
     }()
 
     /// A router object responsible for handling navigation actions of this view controller.
@@ -298,9 +294,7 @@ open class ChatChannelListVC: _ViewController,
             parent.isUIHostingController
         else { return }
 
-        if #available(iOS 13.0, *) {
-            setupParentNavigation(parent: parent)
-        }
+        setupParentNavigation(parent: parent)
     }
 
     // MARK: - Collection View
@@ -443,6 +437,7 @@ open class ChatChannelListVC: _ViewController,
             case .remoteDataFetched:
                 isLoading = false
                 shouldHideEmptyView = !controller.channels.isEmpty
+                channelListErrorView.hide()
             case .localDataFetchFailed, .remoteDataFetchFailed:
                 shouldHideEmptyView = emptyView.isHidden
                 isLoading = false
@@ -474,26 +469,10 @@ open class ChatChannelListVC: _ViewController,
 
 extension ChatChannel: Differentiable {
     public func isContentEqual(to source: ChatChannel) -> Bool {
-        cid == source.cid &&
-            name == source.name &&
-            imageURL == source.imageURL &&
-            lastMessageAt == source.lastMessageAt &&
-            createdAt == source.createdAt &&
-            updatedAt == source.updatedAt &&
-            deletedAt == source.deletedAt &&
-            truncatedAt == source.truncatedAt &&
-            isHidden == source.isHidden &&
-            createdBy == source.createdBy &&
-            ownCapabilities == source.ownCapabilities &&
-            isFrozen == source.isFrozen &&
-            memberCount == source.memberCount &&
-            membership == source.membership &&
-            watcherCount == source.watcherCount &&
-            team == source.team &&
-            reads == source.reads &&
-            muteDetails == source.muteDetails &&
-            cooldownDuration == source.cooldownDuration &&
-            extraData == source.extraData &&
-            previewMessage == source.previewMessage
+        self == source
+    }
+    
+    public var differenceIdentifier: Int {
+        hashValue
     }
 }

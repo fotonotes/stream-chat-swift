@@ -48,6 +48,7 @@ final class ChannelReadUpdaterMiddleware_Tests: XCTestCase {
             members: [.dummy(user: currentUserPayload), .dummy(user: anotherUserPayload)],
             membership: .dummy(user: currentUserPayload),
             messages: [],
+            pendingMessages: nil,
             pinnedMessages: [],
             channelReads: [currentUserReadPayload],
             isHidden: false
@@ -831,7 +832,7 @@ final class ChannelReadUpdaterMiddleware_Tests: XCTestCase {
             eventType: .messageRead,
             cid: channelId,
             user: dummyCurrentUser,
-            unreadCount: .noUnread,
+            unreadCount: .init(channels: 0, messages: 0, threads: 0),
             createdAt: newReadDate
         )
         let messageReadEvent = try MessageReadEventDTO(from: eventPayload)
@@ -880,7 +881,7 @@ final class ChannelReadUpdaterMiddleware_Tests: XCTestCase {
             eventType: .messageRead,
             cid: channelId,
             user: dummyUser(id: memberId),
-            unreadCount: .noUnread,
+            unreadCount: .init(channels: 0, messages: 0, threads: 0),
             createdAt: newReadDate
         )
         let messageReadEvent = try MessageReadEventDTO(from: eventPayload)
@@ -937,6 +938,7 @@ final class ChannelReadUpdaterMiddleware_Tests: XCTestCase {
             config: .init(),
             ownCapabilities: [],
             isFrozen: false,
+            isBlocked: false,
             isHidden: nil,
             members: nil,
             memberCount: 0,
@@ -949,7 +951,7 @@ final class ChannelReadUpdaterMiddleware_Tests: XCTestCase {
             cid: channelDetailPayload.cid,
             user: dummyCurrentUser,
             channel: channelDetailPayload,
-            unreadCount: .noUnread,
+            unreadCount: .init(channels: 0, messages: 0, threads: 0),
             createdAt: newReadDate
         )
         let notificationMarkReadEvent = try NotificationMarkReadEventDTO(from: eventPayload)
@@ -998,7 +1000,7 @@ final class ChannelReadUpdaterMiddleware_Tests: XCTestCase {
             cid: payload.channel.cid,
             user: dummyUser(id: memberId),
             channel: payload.channel,
-            unreadCount: .noUnread,
+            unreadCount: .init(channels: 0, messages: 0, threads: 0),
             createdAt: newReadDate
         )
         let messageReadEvent = try NotificationMarkReadEventDTO(from: eventPayload)
@@ -1044,7 +1046,7 @@ final class ChannelReadUpdaterMiddleware_Tests: XCTestCase {
         let eventPayload = EventPayload(
             eventType: .notificationMarkRead,
             user: dummyCurrentUser,
-            unreadCount: .init(channels: 19, messages: 124),
+            unreadCount: .init(channels: 19, messages: 124, threads: 20),
             createdAt: newReadDate
         )
         let notificationMarkAllReadEvent = try NotificationMarkAllReadEventDTO(from: eventPayload)

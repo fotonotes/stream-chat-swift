@@ -7,7 +7,7 @@ import StreamChat
 import StreamChatUI
 import UIKit
 
-final class DemoChatChannelListVC: ChatChannelListVC, EventsControllerDelegate {
+final class DemoChatChannelListVC: ChatChannelListVC {
     /// The `UIButton` instance used for navigating to new channel screen creation.
     lazy var createChannelButton: UIButton = {
         let button = UIButton()
@@ -41,6 +41,11 @@ final class DemoChatChannelListVC: ChatChannelListVC, EventsControllerDelegate {
         .equal(.hidden, to: true)
     ]))
 
+    lazy var unreadChannelsQuery: ChannelListQuery = .init(filter: .and([
+        .containMembers(userIds: [currentUserId]),
+        .hasUnread
+    ]), sort: [.init(key: .unreadCount, isAscending: false)])
+
     lazy var mutedChannelsQuery: ChannelListQuery = .init(filter: .and([
         .containMembers(userIds: [currentUserId]),
         .equal(.muted, to: true)
@@ -62,8 +67,9 @@ final class DemoChatChannelListVC: ChatChannelListVC, EventsControllerDelegate {
 
         initialQuery = controller.query
 
-        eventsController.delegate = self
-        connectionController.delegate = connectionDelegate
+        if AppConfig.shared.demoAppConfig.shouldShowConnectionBanner {
+            connectionController.delegate = connectionDelegate
+        }
 
         navigationItem.rightBarButtonItems = [
             UIBarButtonItem(customView: filterChannelsButton),
@@ -75,6 +81,17 @@ final class DemoChatChannelListVC: ChatChannelListVC, EventsControllerDelegate {
         emptyView.actionButtonPressed = { [weak self] in
             guard let self = self else { return }
             self.didTapCreateNewChannel(self)
+        }
+    }
+
+    override func setUpLayout() {
+        super.setUpLayout()
+
+        if isChatChannelListStatesEnabled {
+            NSLayoutConstraint.activate([
+                channelListErrorView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+                channelListErrorView.heightAnchor.constraint(equalToConstant: 60)
+            ])
         }
     }
 
@@ -101,6 +118,15 @@ final class DemoChatChannelListVC: ChatChannelListVC, EventsControllerDelegate {
             }
         )
 
+        let unreadChannelsAction = UIAlertAction(
+            title: "Unread Channels",
+            style: .default,
+            handler: { [weak self] _ in
+                self?.title = "Unread Channels"
+                self?.setUnreadChannelsQuery()
+            }
+        )
+
         let coolChannelsAction = UIAlertAction(
             title: "Cool Channels",
             style: .default,
@@ -121,7 +147,13 @@ final class DemoChatChannelListVC: ChatChannelListVC, EventsControllerDelegate {
 
         presentAlert(
             title: "Filter Channels",
-            actions: [defaultChannelsAction, hiddenChannelsAction, mutedChannelsAction, coolChannelsAction],
+            actions: [
+                defaultChannelsAction,
+                unreadChannelsAction,
+                hiddenChannelsAction,
+                mutedChannelsAction,
+                coolChannelsAction
+            ],
             preferredStyle: .actionSheet,
             sourceView: filterChannelsButton
         )
@@ -129,6 +161,10 @@ final class DemoChatChannelListVC: ChatChannelListVC, EventsControllerDelegate {
 
     func setHiddenChannelsQuery() {
         replaceQuery(hiddenChannelsQuery)
+    }
+
+    func setUnreadChannelsQuery() {
+        replaceQuery(unreadChannelsQuery)
     }
 
     func setMutedChannelsQuery() {
@@ -184,13 +220,5 @@ final class DemoChatChannelListVC: ChatChannelListVC, EventsControllerDelegate {
             animated: false,
             scrollPosition: .centeredHorizontally
         )
-    }
-
-    func eventsController(_ controller: EventsController, didReceiveEvent event: Event) {
-        if let newMessageEvent = event as? MessageNewEvent {
-            // This is a DemoApp integration test to make sure there are no deadlocks when
-            // accessing CoreDataLazy properties from the EventsController.delegate
-            _ = newMessageEvent.message.author
-        }
     }
 }

@@ -93,7 +93,7 @@ final class CurrentUserModelDTO_Tests: XCTestCase {
         XCTAssertEqual(payload.createdAt, loadedCurrentUser.userCreatedAt)
         XCTAssertEqual(payload.updatedAt, loadedCurrentUser.userUpdatedAt)
         XCTAssertEqual(payload.lastActiveAt, loadedCurrentUser.lastActiveAt)
-        XCTAssertEqual(payload.unreadCount, loadedCurrentUser.unreadCount)
+        XCTAssert(loadedCurrentUser.unreadCount.isEqual(toPayload: payload.unreadCount) == true)
         XCTAssertEqual(payload.extraData, loadedCurrentUser.extraData)
         XCTAssertEqual(mutedUserIDs, Set(loadedCurrentUser.mutedUsers.map(\.id)))
         XCTAssertEqual(payload.devices.count, loadedCurrentUser.devices.count)
@@ -138,6 +138,40 @@ final class CurrentUserModelDTO_Tests: XCTestCase {
         XCTAssertNotEqual(currentUser?.devices.first?.id, initialDevice.id)
         // ..and is not set to currentDevice
         XCTAssertEqual(currentUser?.currentDevice, nil)
+    }
+
+    func test_savingCurrentUser_whenUnreadThreadsCountNil_doesNotOverrideThreadsCount() throws {
+        let userId = UserId.unique
+        let previousUserPayload = CurrentUserPayload.dummy(userId: userId, role: .admin, unreadCount: .init(
+            channels: 3,
+            messages: 2,
+            threads: 3
+        ))
+        try database.writeSynchronously { session in
+            try session.saveCurrentUser(payload: previousUserPayload)
+        }
+
+        var currentUser: CurrentChatUser? {
+            try? database.viewContext.currentUser?.asModel()
+        }
+
+        XCTAssertEqual(currentUser?.unreadCount.channels, 3)
+        XCTAssertEqual(currentUser?.unreadCount.messages, 2)
+        XCTAssertEqual(currentUser?.unreadCount.threads, 3)
+
+        let newUserPayload = CurrentUserPayload.dummy(userId: userId, role: .admin, unreadCount: .init(
+            channels: 3,
+            messages: 2,
+            threads: nil
+        ))
+        try database.writeSynchronously { session in
+            try session.saveCurrentUser(payload: newUserPayload)
+        }
+
+        // Values remain the same even tho threads was nil
+        XCTAssertEqual(currentUser?.unreadCount.channels, 3)
+        XCTAssertEqual(currentUser?.unreadCount.messages, 2)
+        XCTAssertEqual(currentUser?.unreadCount.threads, 3)
     }
 
     func test_saveCurrentUser_removesChannelMutesNotInPayload() throws {

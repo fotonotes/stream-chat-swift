@@ -103,7 +103,8 @@ extension ChatClient {
             _ extensionLifecycle: NotificationExtensionLifecycle,
             _ backgroundTaskScheduler: BackgroundTaskScheduler?,
             _ internetConnection: InternetConnection,
-            _ keepConnectionAliveInBackground: Bool
+            _ keepConnectionAliveInBackground: Bool,
+            _ reconnectionTimeoutHandler: StreamTimer?
         ) -> ConnectionRecoveryHandler = {
             DefaultConnectionRecoveryHandler(
                 webSocketClient: $0,
@@ -114,7 +115,8 @@ extension ChatClient {
                 internetConnection: $5,
                 reconnectionStrategy: DefaultRetryStrategy(),
                 reconnectionTimerType: DefaultTimer.self,
-                keepConnectionAliveInBackground: $6
+                keepConnectionAliveInBackground: $6,
+                reconnectionTimeoutHandler: $7
             )
         }
 
@@ -122,8 +124,6 @@ extension ChatClient {
 
         var syncRepositoryBuilder: (
             _ config: ChatClientConfig,
-            _ activeChannelControllers: ThreadSafeWeakCollection<ChatChannelController>,
-            _ activeChannelListControllers: ThreadSafeWeakCollection<ChatChannelListController>,
             _ offlineRequestsRepository: OfflineRequestsRepository,
             _ eventNotificationCenter: EventNotificationCenter,
             _ database: DatabaseContainer,
@@ -132,20 +132,12 @@ extension ChatClient {
         ) -> SyncRepository = {
             SyncRepository(
                 config: $0,
-                activeChannelControllers: $1,
-                activeChannelListControllers: $2,
-                offlineRequestsRepository: $3,
-                eventNotificationCenter: $4,
-                database: $5,
-                apiClient: $6,
-                channelListUpdater: $7
+                offlineRequestsRepository: $1,
+                eventNotificationCenter: $2,
+                database: $3,
+                apiClient: $4,
+                channelListUpdater: $5
             )
-        }
-
-        var callRepositoryBuilder: (
-            _ apiClient: APIClient
-        ) -> CallRepository = {
-            CallRepository(apiClient: $0)
         }
 
         var channelRepositoryBuilder: (
@@ -153,6 +145,13 @@ extension ChatClient {
             _ apiClient: APIClient
         ) -> ChannelRepository = {
             ChannelRepository(database: $0, apiClient: $1)
+        }
+        
+        var pollsRepositoryBuilder: (
+            _ database: DatabaseContainer,
+            _ apiClient: APIClient
+        ) -> PollsRepository = {
+            PollsRepository(database: $0, apiClient: $1)
         }
         
         var channelListUpdaterBuilder: (

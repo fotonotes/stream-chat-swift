@@ -99,6 +99,8 @@ final class ChatClient_Mock: ChatClient {
     // MARK: - Clean Up
 
     func cleanUp() {
+        resetSharedCurrentUserController()
+        
         (apiClient as? APIClient_Spy)?.cleanUp()
 
         fetchCurrentUserIdFromDatabase_called = false
@@ -148,6 +150,9 @@ extension ChatClient {
                         deletedMessagesVisibility: $4,
                         shouldShowShadowedMessages: $5
                     )
+                }, 
+                internetConnection: { center, _ in
+                    InternetConnection_Mock(notificationCenter: center)
                 },
                 authenticationRepositoryBuilder: AuthenticationRepository_Mock.init
             )
@@ -199,6 +204,10 @@ extension ChatClient {
     var mockAuthenticationRepository: AuthenticationRepository_Mock {
         authenticationRepository as! AuthenticationRepository_Mock
     }
+    
+    var mockPollsRepository: PollsRepository_Mock {
+        pollsRepository as! PollsRepository_Mock
+    }
 
     func simulateProvidedConnectionId(connectionId: ConnectionId?) {
         guard let connectionId = connectionId else {
@@ -226,7 +235,7 @@ extension ChatClient.Environment {
             },
             databaseContainerBuilder: {
                 DatabaseContainer_Spy(
-                    kind: .onDisk(databaseFileURL: .newTemporaryFileURL()),
+                    kind: .inMemory,
                     shouldFlushOnStart: $1,
                     shouldResetEphemeralValuesOnStart: $2,
                     localCachingSettings: $3,
@@ -241,7 +250,8 @@ extension ChatClient.Environment {
             notificationCenterBuilder: EventNotificationCenter.init,
             authenticationRepositoryBuilder: AuthenticationRepository_Mock.init,
             syncRepositoryBuilder: SyncRepository_Mock.init,
-            channelListUpdaterBuilder: ChannelListUpdater_Spy.init, 
+            pollsRepositoryBuilder: PollsRepository_Mock.init,
+            channelListUpdaterBuilder: ChannelListUpdater_Spy.init,
             messageRepositoryBuilder: MessageRepository_Mock.init,
             offlineRequestsRepositoryBuilder: OfflineRequestsRepository_Mock.init
         )

@@ -6,7 +6,6 @@
 @testable import StreamChatTestTools
 import XCTest
 
-@available(iOS 13, *)
 final class MessageController_SwiftUI_Tests: iOS13TestCase {
     var messageController: ChatMessageController_Mock!
 
@@ -69,6 +68,7 @@ final class MessageController_SwiftUI_Tests: iOS13TestCase {
         let observableObject = messageController.observableObject
 
         let newReaction: ChatMessageReaction = .init(
+            id: .unique,
             type: "likes",
             score: 3,
             createdAt: .unique,

@@ -112,6 +112,37 @@ public extension EventType {
 
     /// When a channel was deleted
     static let notificationChannelDeleted: Self = "notification.channel_deleted"
+    
+    // MARK: - polls
+    
+    /// When a poll was created.
+    static let pollCreated: Self = "poll.created"
+
+    /// When a poll was closed.
+    static let pollClosed: Self = "poll.closed"
+
+    /// When a poll was deleted.
+    static let pollDeleted: Self = "poll.deleted"
+
+    /// When a poll was updated.
+    static let pollUpdated: Self = "poll.updated"
+
+    /// When a vote was casted in a poll.
+    static let pollVoteCasted: Self = "poll.vote_casted"
+
+    /// When a vote was changed in a poll.
+    static let pollVoteChanged: Self = "poll.vote_changed"
+
+    /// When a vote was removed from a poll.
+    static let pollVoteRemoved: Self = "poll.vote_removed"
+
+    // MARK: - threads
+
+    /// When a thread is updated.
+    static let threadUpdated: Self = "thread.updated"
+
+    /// When a thread has a new reply.
+    static let threadMessageNew: Self = "notification.thread_message_new"
 }
 
 extension EventType {
@@ -168,6 +199,15 @@ extension EventType {
         case .notificationInviteRejected:
             return try NotificationInviteRejectedEventDTO(from: response)
         case .notificationChannelDeleted: return try NotificationChannelDeletedEventDTO(from: response)
+        case .pollCreated: return try PollCreatedEventDTO(from: response)
+        case .pollClosed: return try PollClosedEventDTO(from: response)
+        case .pollDeleted: return try PollDeletedEventDTO(from: response)
+        case .pollUpdated: return try PollUpdatedEventDTO(from: response)
+        case .pollVoteCasted: return try PollVoteCastedEventDTO(from: response)
+        case .pollVoteChanged: return try PollVoteChangedEventDTO(from: response)
+        case .pollVoteRemoved: return try PollVoteRemovedEventDTO(from: response)
+        case .threadUpdated: return try ThreadUpdatedEventDTO(from: response)
+        case .threadMessageNew: return try ThreadMessageNewEventDTO(from: response)
         default:
             if response.cid == nil {
                 throw ClientError.UnknownUserEvent(response.eventType)
@@ -179,13 +219,13 @@ extension EventType {
 }
 
 extension ClientError {
-    class UnknownChannelEvent: ClientError {
+    final class UnknownChannelEvent: ClientError {
         init(_ type: EventType) {
             super.init("Event with \(type) cannot be decoded as system event.")
         }
     }
 
-    class UnknownUserEvent: ClientError {
+    final class UnknownUserEvent: ClientError {
         init(_ type: EventType) {
             super.init("Event with \(type) cannot be decoded as system event.")
         }

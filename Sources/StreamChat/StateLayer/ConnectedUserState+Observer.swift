@@ -4,14 +4,13 @@
 
 import Foundation
 
-@available(iOS 13.0, *)
 extension ConnectedUserState {
     struct Observer {
         private let userObserver: StateLayerDatabaseObserver<EntityResult, CurrentChatUser, CurrentUserDTO>
         
         init(database: DatabaseContainer) {
             userObserver = StateLayerDatabaseObserver(
-                databaseContainer: database,
+                database: database,
                 fetchRequest: CurrentUserDTO.defaultFetchRequest,
                 itemCreator: { try $0.asModel() }
             )

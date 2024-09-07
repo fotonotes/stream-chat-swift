@@ -31,6 +31,9 @@ public class CurrentChatUser: ChatUser {
 
     /// A set of users muted by the user.
     public let mutedUsers: Set<ChatUser>
+    
+    /// A list of blocked user ids.
+    public let blockedUserIds: Set<UserId>
 
     /// A set of users flagged by the user.
     ///
@@ -47,8 +50,7 @@ public class CurrentChatUser: ChatUser {
     /// A set of channels muted by the current user.
     ///
     /// - Important: The `mutedChannels` property is loaded and evaluated lazily to maintain high performance.
-    public var mutedChannels: Set<ChatChannel> { _mutedChannels }
-    @CoreDataLazy private var _mutedChannels: Set<ChatChannel>
+    public let mutedChannels: Set<ChatChannel>
 
     /// The unread counts for the current user.
     public let unreadCount: UnreadCount
@@ -76,23 +78,25 @@ public class CurrentChatUser: ChatUser {
         extraData: [String: RawJSON],
         devices: [Device],
         currentDevice: Device?,
+        blockedUserIds: Set<UserId>,
         mutedUsers: Set<ChatUser>,
         flaggedUsers: Set<ChatUser>,
         flaggedMessageIDs: Set<MessageId>,
         unreadCount: UnreadCount,
-        mutedChannels: @escaping () -> Set<ChatChannel>,
-        privacySettings: UserPrivacySettings,
-        underlyingContext: NSManagedObjectContext?
+        mutedChannels: Set<ChatChannel>,
+        privacySettings: UserPrivacySettings
     ) {
         self.devices = devices
         self.currentDevice = currentDevice
+        self.blockedUserIds = blockedUserIds
         self.mutedUsers = mutedUsers
         self.flaggedUsers = flaggedUsers
         self.flaggedMessageIDs = flaggedMessageIDs
         self.unreadCount = unreadCount
         self.isInvisible = isInvisible
         self.privacySettings = privacySettings
-
+        self.mutedChannels = mutedChannels
+        
         super.init(
             id: id,
             name: name,
@@ -109,7 +113,78 @@ public class CurrentChatUser: ChatUser {
             language: language,
             extraData: extraData
         )
+    }
+}
 
-        $_mutedChannels = (mutedChannels, underlyingContext)
+/// The total unread information from the current user.
+public struct CurrentUserUnreads {
+    /// The total number of unread channels.
+    public let totalUnreadChannelsCount: Int
+    /// The total number of unread threads.
+    public let totalUnreadThreadsCount: Int
+    /// The unread information per channel.
+    public let unreadChannels: [UnreadChannel]
+    /// The unread information per thread.
+    public let unreadThreads: [UnreadThread]
+    /// The unread information per channel type.
+    public let unreadChannelsByType: [UnreadChannelByType]
+}
+
+/// The unread information of a channel.
+public struct UnreadChannel {
+    /// The channel id.
+    public let channelId: ChannelId
+    /// The number of unread messages inside the channel.
+    public let unreadMessagesCount: Int
+    /// The date which the current user last read the channel.
+    public let lastRead: Date?
+}
+
+/// The unread information from channels with a specific type.
+public struct UnreadChannelByType {
+    /// The channel type.
+    public let channelType: ChannelType
+    /// The number of unread channels of this channel type.
+    public let unreadChannelCount: Int
+    /// The number of unread messages of all the channels with this type.
+    public let unreadMessagesCount: Int
+}
+
+/// The unread information of a thread.
+public struct UnreadThread {
+    /// The message id of the root of the thread.
+    public let parentMessageId: MessageId
+    /// The number of unread replies inside the thread.
+    public let unreadRepliesCount: Int
+    /// The date which the current user last read the thread.
+    public let lastRead: Date?
+    /// The id of the last reply which the current user read in the thread.
+    public let lastReadMessageId: MessageId?
+}
+
+extension CurrentUserUnreadsPayload {
+    func asModel() -> CurrentUserUnreads {
+        CurrentUserUnreads(
+            totalUnreadChannelsCount: totalUnreadCount,
+            totalUnreadThreadsCount: totalUnreadThreadsCount,
+            unreadChannels: channels.map { .init(
+                channelId: $0.channelId,
+                unreadMessagesCount: $0.unreadCount,
+                lastRead: $0.lastRead
+            ) },
+            unreadThreads: threads.map { .init(
+                parentMessageId: $0.parentMessageId,
+                unreadRepliesCount: $0.unreadCount,
+                lastRead: $0.lastRead,
+                lastReadMessageId: $0.lastReadMessageId
+            ) },
+            unreadChannelsByType: channelType.map {
+                .init(
+                    channelType: $0.channelType,
+                    unreadChannelCount: $0.channelCount,
+                    unreadMessagesCount: $0.unreadCount
+                )
+            }
+        )
     }
 }

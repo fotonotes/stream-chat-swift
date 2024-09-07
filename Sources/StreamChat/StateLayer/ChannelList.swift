@@ -5,9 +5,9 @@
 import Foundation
 
 /// An object which represents a list of `ChatChannel`s for the specified  channel query.
-@available(iOS 13.0, *)
 public class ChannelList {
     private let channelListUpdater: ChannelListUpdater
+    private let client: ChatClient
     private let stateBuilder: StateBuilder<ChannelListState>
     let query: ChannelListQuery
     
@@ -17,6 +17,7 @@ public class ChannelList {
         client: ChatClient,
         environment: Environment = .init()
     ) {
+        self.client = client
         self.query = query
         let channelListUpdater = environment.channelListUpdater(
             client.databaseContainer,
@@ -48,6 +49,7 @@ public class ChannelList {
     public func get() async throws {
         let pagination = Pagination(pageSize: query.pagination.pageSize)
         try await loadChannels(with: pagination)
+        client.syncRepository.startTrackingChannelList(self)
     }
     
     // MARK: - Channel List Pagination
@@ -79,9 +81,15 @@ public class ChannelList {
             loadedChannelsCount: count
         )
     }
+    
+    // MARK: - Internal
+    
+    func refreshLoadedChannels() async throws -> Set<ChannelId> {
+        let count = await state.channels.count
+        return try await channelListUpdater.refreshLoadedChannels(for: query, channelCount: count)
+    }
 }
 
-@available(iOS 13.0, *)
 extension ChannelList {
     struct Environment {
         var channelListUpdater: (

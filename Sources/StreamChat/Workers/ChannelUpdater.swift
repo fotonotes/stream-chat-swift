@@ -7,20 +7,17 @@ import Foundation
 /// Makes a channel query call to the backend and updates the local storage with the results.
 class ChannelUpdater: Worker {
     private let channelRepository: ChannelRepository
-    private let callRepository: CallRepository
     private let messageRepository: MessageRepository
     let paginationStateHandler: MessagesPaginationStateHandling
 
     init(
         channelRepository: ChannelRepository,
-        callRepository: CallRepository,
         messageRepository: MessageRepository,
         paginationStateHandler: MessagesPaginationStateHandling,
         database: DatabaseContainer,
         apiClient: APIClient
     ) {
         self.channelRepository = channelRepository
-        self.callRepository = callRepository
         self.messageRepository = messageRepository
         self.paginationStateHandler = paginationStateHandler
         super.init(database: database, apiClient: apiClient)
@@ -56,6 +53,9 @@ class ChannelUpdater: Worker {
         
         let didLoadFirstPage = channelQuery.pagination?.parameter == nil
         let didJumpToMessage: Bool = channelQuery.pagination?.parameter?.isJumpingToMessage == true
+        let resetMembers = didLoadFirstPage
+        let resetMessages = didLoadFirstPage || didJumpToMessage
+        let resetWatchers = didLoadFirstPage
         let isChannelCreate = onChannelCreated != nil
 
         let completion: (Result<ChannelPayload, Error>) -> Void = { [weak database] result in
@@ -70,13 +70,13 @@ class ChannelUpdater: Worker {
 
                 database?.write { session in
                     if let channelDTO = session.channel(cid: payload.channel.cid) {
-                        if didJumpToMessage || didLoadFirstPage {
+                        if resetMessages {
                             channelDTO.cleanAllMessagesExcludingLocalOnly()
                         }
-                        if let actions, actions.resetMembers {
+                        if resetMembers {
                             channelDTO.members.removeAll()
                         }
-                        if let actions, actions.resetWatchers {
+                        if resetWatchers {
                             channelDTO.watchers.removeAll()
                         }
                     }
@@ -85,7 +85,7 @@ class ChannelUpdater: Worker {
                     updatedChannel.oldestMessageAt = self.paginationState.oldestMessageAt?.bridgeDate
                     updatedChannel.newestMessageAt = self.paginationState.newestMessageAt?.bridgeDate
                     
-                    if let memberListSorting = actions?.memberListSorting {
+                    if let memberListSorting = actions?.memberListSorting, !memberListSorting.isEmpty {
                         let memberListQuery = ChannelMemberListQuery(cid: payload.channel.cid, sort: memberListSorting)
                         let queryDTO = try session.saveQuery(memberListQuery)
                         queryDTO.members = updatedChannel.members
@@ -305,6 +305,7 @@ class ChannelUpdater: Worker {
         quotedMessageId: MessageId?,
         skipPush: Bool,
         skipEnrichUrl: Bool,
+        poll: PollPayload? = nil,
         extraData: [String: RawJSON],
         completion: ((Result<ChatMessage, Error>) -> Void)? = nil
     ) {
@@ -326,6 +327,7 @@ class ChannelUpdater: Worker {
                 createdAt: nil,
                 skipPush: skipPush,
                 skipEnrichUrl: skipEnrichUrl,
+                poll: poll,
                 extraData: extraData
             )
             if quotedMessageId != nil {
@@ -642,10 +644,6 @@ class ChannelUpdater: Worker {
             }
         }
     }
-
-    func createCall(in cid: ChannelId, callId: String, type: String, completion: @escaping (Result<CallWithToken, Error>) -> Void) {
-        callRepository.createCall(in: cid, callId: callId, type: type, completion: completion)
-    }
     
     func deleteFile(in cid: ChannelId, url: String, completion: ((Error?) -> Void)? = nil) {
         apiClient.request(endpoint: .deleteFile(cid: cid, url: url), completion: {
@@ -684,7 +682,6 @@ class ChannelUpdater: Worker {
 
 // MARK: - Async
 
-@available(iOS 13.0, *)
 extension ChannelUpdater {
     func acceptInvite(cid: ChannelId, message: String?) async throws {
         try await withCheckedThrowingContinuation { continuation in
@@ -721,8 +718,8 @@ extension ChannelUpdater {
             }
         }
         guard let ids = payload.watchers?.map(\.id) else { return [] }
-        return try await database.read { context in
-            try ids.compactMap { try UserDTO.load(id: $0, context: context)?.asModel() }
+        return try await database.read { session in
+            try ids.compactMap { try session.user(id: $0)?.asModel() }
         }
     }
     
@@ -916,19 +913,12 @@ extension ChannelUpdater {
     ) async throws -> ChannelPayload {
         // Just populate the closure since we select the endpoint based on it.
         let useCreateEndpoint: ((ChannelId) -> Void)? = channelQuery.cid == nil ? { _ in } : nil
-        let parameter = channelQuery.pagination?.parameter
-        let reset = parameter == nil || parameter?.isJumpingToMessage == true
-        let actions = ChannelUpdateActions(
-            memberListSorting: memberSorting,
-            resetMembers: reset,
-            resetWatchers: reset
-        )
         return try await withCheckedThrowingContinuation { continuation in
             update(
                 channelQuery: channelQuery,
                 isInRecoveryMode: false,
                 onChannelCreated: useCreateEndpoint,
-                actions: actions,
+                actions: ChannelUpdateActions(memberListSorting: memberSorting),
                 completion: continuation.resume(with:)
             )
         }
@@ -1027,16 +1017,13 @@ extension ChannelUpdater {
 extension ChannelUpdater {
     /// Additional operations while updating the channel.
     struct ChannelUpdateActions {
-        /// Used for associating members with a default member list query consisting of cid and sorting.
+        /// Store members in channel payload for a member list query consisting of cid and sorting.
+        ///
+        /// - Note: Used by the state layer which creates default (all channel members) member list query internally.
         let memberListSorting: [Sorting<ChannelMemberListSortingKey>]
-        /// Reset members before saving channel payload.
-        let resetMembers: Bool
-        /// Reset watchers before saving channel payload.
-        let resetWatchers: Bool
     }
 }
 
-@available(iOS 13.0, *)
 extension CheckedContinuation where T == Void, E == Error {
     func resume(with error: Error?) {
         if let error {

@@ -20,6 +20,8 @@ struct DemoAppConfig {
     var isLocationAttachmentsEnabled: Bool
     /// Set this value to define if we should mimic token refresh scenarios.
     var tokenRefreshDetails: TokenRefreshDetails?
+    /// A Boolean value that determines if a connection banner UI should be shown.
+    var shouldShowConnectionBanner: Bool
 
     /// The details to generate expirable tokens in the demo app.
     struct TokenRefreshDetails {
@@ -48,10 +50,9 @@ class AppConfig {
             isMessageDebuggerEnabled: false,
             isChannelPinningEnabled: false,
             isLocationAttachmentsEnabled: false,
-            tokenRefreshDetails: nil
+            tokenRefreshDetails: nil,
+            shouldShowConnectionBanner: false
         )
-
-        StreamRuntimeCheck._isBackgroundMappingEnabled = true
 
         if StreamRuntimeCheck.isStreamInternalConfiguration {
             demoAppConfig.isAtlantisEnabled = true
@@ -59,6 +60,7 @@ class AppConfig {
             demoAppConfig.isLocationAttachmentsEnabled = true
             demoAppConfig.isLocationAttachmentsEnabled = true
             demoAppConfig.isHardDeleteEnabled = true
+            demoAppConfig.shouldShowConnectionBanner = true
             StreamRuntimeCheck.assertionsEnabled = true
         }
     }
@@ -166,8 +168,8 @@ class AppConfigViewController: UITableViewController {
         case isMessageDebuggerEnabled
         case isChannelPinningEnabled
         case isLocationAttachmentsEnabled
-        case isBackgroundMappingEnabled
         case tokenRefreshDetails
+        case shouldShowConnectionBanner
     }
 
     enum ComponentsConfigOption: String, CaseIterable {
@@ -183,11 +185,14 @@ class AppConfigViewController: UITableViewController {
         case isUnreadMessageSeparatorEnabled
         case isJumpToUnreadEnabled
         case mentionAllAppUsers
+        case isBlockingUsersEnabled
+        case isMessageListAnimationsEnabled
     }
 
     enum ChatClientConfigOption: String, CaseIterable {
         case isLocalStorageEnabled
         case staysConnectedInBackground
+        case reconnectionTimeout
         case shouldShowShadowedMessages
         case deletedMessagesVisibility
         case isChannelAutomaticFilteringEnabled
@@ -310,10 +315,6 @@ class AppConfigViewController: UITableViewController {
             cell.accessoryView = makeSwitchButton(demoAppConfig.isLocationAttachmentsEnabled) { [weak self] newValue in
                 self?.demoAppConfig.isLocationAttachmentsEnabled = newValue
             }
-        case .isBackgroundMappingEnabled:
-            cell.accessoryView = makeSwitchButton(StreamRuntimeCheck._isBackgroundMappingEnabled) { newValue in
-                StreamRuntimeCheck._isBackgroundMappingEnabled = newValue
-            }
         case .tokenRefreshDetails:
             if let tokenRefreshDuration = demoAppConfig.tokenRefreshDetails?.duration {
                 cell.detailTextLabel?.text = "Duration: \(tokenRefreshDuration)s"
@@ -321,6 +322,10 @@ class AppConfigViewController: UITableViewController {
                 cell.detailTextLabel?.text = "Disabled"
             }
             cell.accessoryType = .none
+        case .shouldShowConnectionBanner:
+            cell.accessoryView = makeSwitchButton(demoAppConfig.shouldShowConnectionBanner) { [weak self] newValue in
+                self?.demoAppConfig.shouldShowConnectionBanner = newValue
+            }
         }
     }
 
@@ -343,6 +348,9 @@ class AppConfigViewController: UITableViewController {
             cell.accessoryView = makeSwitchButton(chatClientConfig.staysConnectedInBackground) { [weak self] newValue in
                 self?.chatClientConfig.staysConnectedInBackground = newValue
             }
+        case .reconnectionTimeout:
+            cell.detailTextLabel?.text = chatClientConfig.reconnectionTimeout.map { "\($0)" } ?? "None"
+            cell.accessoryType = .disclosureIndicator
         case .shouldShowShadowedMessages:
             cell.accessoryView = makeSwitchButton(chatClientConfig.shouldShowShadowedMessages) { [weak self] newValue in
                 self?.chatClientConfig.shouldShowShadowedMessages = newValue
@@ -367,6 +375,8 @@ class AppConfigViewController: UITableViewController {
         switch option {
         case .deletedMessagesVisibility:
             pushDeletedMessagesVisibilitySelectorVC()
+        case .reconnectionTimeout:
+            pushReconnectionTimeoutSelectorVC()
         default:
             break
         }
@@ -458,6 +468,14 @@ class AppConfigViewController: UITableViewController {
         case .mentionAllAppUsers:
             cell.accessoryView = makeSwitchButton(Components.default.mentionAllAppUsers) { newValue in
                 Components.default.mentionAllAppUsers = newValue
+            }
+        case .isBlockingUsersEnabled:
+            cell.accessoryView = makeSwitchButton(Components.default.isBlockingUsersEnabled) { newValue in
+                Components.default.isBlockingUsersEnabled = newValue
+            }
+        case .isMessageListAnimationsEnabled:
+            cell.accessoryView = makeSwitchButton(Components.default.isMessageListAnimationsEnabled) { newValue in
+                Components.default.isMessageListAnimationsEnabled = newValue
             }
         }
     }
@@ -563,6 +581,24 @@ class AppConfigViewController: UITableViewController {
         selectorViewController.didChangeSelectedOptions = { [weak self] options in
             guard let selectedOption = options.first else { return }
             UserConfig.shared.language = selectedOption
+            self?.tableView.reloadData()
+        }
+
+        navigationController?.pushViewController(selectorViewController, animated: true)
+    }
+
+    private func pushReconnectionTimeoutSelectorVC() {
+        let selectorViewController = OptionsSelectorViewController<TimeInterval?>(
+            options: [nil, 15.0, 30.0, 45.0, 60.0],
+            initialSelectedOptions: [chatClientConfig.reconnectionTimeout],
+            allowsMultipleSelection: false,
+            optionFormatter: { option in
+                option.map { "\($0)" } ?? "None"
+            }
+        )
+        selectorViewController.didChangeSelectedOptions = { [weak self] options in
+            guard let selectedOption = options.first else { return }
+            self?.chatClientConfig.reconnectionTimeout = selectedOption
             self?.tableView.reloadData()
         }
 

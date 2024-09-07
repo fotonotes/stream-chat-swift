@@ -147,7 +147,7 @@ public class ChatChannelController: DataController, DelegateCallable, DataStoreP
     /// It is `true` if the channel typing events are enabled as well as the user privacy settings.
     internal var shouldSendTypingEvents: Bool {
         /// Ignore if user typing indicators privacy settings are disabled. By default, they are enabled.
-        let currentUserPrivacySettings = client.currentUserController().currentUser?.privacySettings
+        let currentUserPrivacySettings = client.sharedCurrentUserController.currentUser?.privacySettings
         let isTypingIndicatorsForCurrentUserEnabled = currentUserPrivacySettings?.typingIndicators?.enabled ?? true
         let isChannelTypingEventsEnabled = channel?.canSendTypingEvents ?? true
         return isTypingIndicatorsForCurrentUserEnabled && isChannelTypingEventsEnabled
@@ -172,17 +172,18 @@ public class ChatChannelController: DataController, DelegateCallable, DataStoreP
 
     /// Database observers.
     /// Will be `nil` when observing channel with backend generated `id` is not yet created.
-    private var channelObserver: EntityDatabaseObserverWrapper<ChatChannel, ChannelDTO>?
-    private var messagesObserver: ListDatabaseObserverWrapper<ChatMessage, MessageDTO>?
+    private var channelObserver: BackgroundEntityDatabaseObserver<ChatChannel, ChannelDTO>?
+    private var messagesObserver: BackgroundListDatabaseObserver<ChatMessage, MessageDTO>?
 
     private var eventObservers: [EventObserver] = []
     private let environment: Environment
+    
+    private let pollsRepository: PollsRepository
 
     var _basePublishers: Any?
     /// An internal backing object for all publicly available Combine publishers. We use it to simplify the way we expose
     /// publishers. Instead of creating custom `Publisher` types, we use `CurrentValueSubject` and `PassthroughSubject` internally,
     /// and expose the published values by mapping them to a read-only `AnyPublisher` type.
-    @available(iOS 13, *)
     var basePublishers: BasePublishers {
         if let value = _basePublishers as? BasePublishers {
             return value
@@ -214,12 +215,12 @@ public class ChatChannelController: DataController, DelegateCallable, DataStoreP
         self.messageOrdering = messageOrdering
         updater = self.environment.channelUpdaterBuilder(
             client.channelRepository,
-            client.callRepository,
             client.messageRepository,
             client.makeMessagesPaginationStateHandler(),
             client.databaseContainer,
             client.apiClient
         )
+        pollsRepository = client.pollsRepository
         
         super.init()
 
@@ -228,7 +229,7 @@ public class ChatChannelController: DataController, DelegateCallable, DataStoreP
     }
 
     override public func synchronize(_ completion: ((_ error: Error?) -> Void)? = nil) {
-        client.startTrackingChannelController(self)
+        client.syncRepository.startTrackingChannelController(self)
         synchronize(isInRecoveryMode: false, completion)
     }
 
@@ -715,37 +716,70 @@ public class ChatChannelController: DataController, DelegateCallable, DataStoreP
         extraData: [String: RawJSON] = [:],
         completion: ((Result<MessageId, Error>) -> Void)? = nil
     ) {
-        /// Perform action only if channel is already created on backend side and have a valid `cid`.
-        guard let cid = cid, isChannelAlreadyCreated else {
-            channelModificationFailed { error in
-                completion?(.failure(error ?? ClientError.Unknown()))
-            }
-            return
-        }
-
-        /// Send stop typing event.
-        eventSender.stopTyping(in: cid, parentMessageId: nil)
-
-        updater.createNewMessage(
-            in: cid,
+        createNewMessage(
             messageId: messageId,
             text: text,
             pinning: pinning,
             isSilent: isSilent,
-            command: nil,
-            arguments: nil,
             attachments: attachments,
             mentionedUserIds: mentionedUserIds,
             quotedMessageId: quotedMessageId,
             skipPush: skipPush,
             skipEnrichUrl: skipEnrichUrl,
-            extraData: extraData
-        ) { result in
-            if let newMessage = try? result.get() {
-                self.client.eventNotificationCenter.process(NewMessagePendingEvent(message: newMessage))
-            }
-            self.callback {
-                completion?(result.map(\.id))
+            extraData: extraData,
+            poll: nil,
+            completion: completion
+        )
+    }
+    
+    /// Creates a new poll.
+    ///
+    /// - Parameters:
+    ///   - name: The name of the poll.
+    ///   - allowAnswers: Whether to allow users to provide their own answers. Answers won't be allowed if `nil` is passed.
+    ///   - allowUserSuggestedOptions: Whether to allow users to suggest options. User suggested options won't be allowed if `nil` is passed.
+    ///   - description: Optional description for the poll.
+    ///   - enforceUniqueVote: Whether to enforce unique votes per user. Unique votes won't be allowed if `nil` is passed.
+    ///   - maxVotesAllowed: The maximum number of votes allowed per user. Up to 10 max votes if `nil` is passed.
+    ///   - votingVisibility: The visibility setting for the poll. Voting visibility would be public if `nil` is passed.
+    ///   - options: Optional array of predefined poll options.
+    ///   - custom: Optional dictionary for any custom data associated with the poll.
+    ///   - completion: A closure to be executed once the poll is created, returning either a `MessageId` on success or an `Error` on failure.
+    public func createPoll(
+        name: String,
+        allowAnswers: Bool? = nil,
+        allowUserSuggestedOptions: Bool? = nil,
+        description: String? = nil,
+        enforceUniqueVote: Bool? = nil,
+        maxVotesAllowed: Int? = nil,
+        votingVisibility: VotingVisibility? = nil,
+        options: [PollOption]? = nil,
+        extraData: [String: RawJSON]? = nil,
+        completion: ((Result<MessageId, Error>) -> Void)?
+    ) {
+        pollsRepository.createPoll(
+            name: name,
+            allowAnswers: allowAnswers,
+            allowUserSuggestedOptions: allowUserSuggestedOptions,
+            description: description,
+            enforceUniqueVote: enforceUniqueVote,
+            maxVotesAllowed: maxVotesAllowed,
+            votingVisibility: votingVisibility?.rawValue,
+            options: options,
+            custom: extraData
+        ) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case let .success(poll):
+                self.createNewMessage(text: "", poll: poll, completion: { result in
+                    self.callback {
+                        completion?(result)
+                    }
+                })
+            case let .failure(error):
+                self.callback {
+                    completion?(.failure(error))
+                }
             }
         }
     }
@@ -996,7 +1030,7 @@ public class ChatChannelController: DataController, DelegateCallable, DataStoreP
             return
         }
 
-        client.startTrackingChannelController(self)
+        client.syncRepository.startTrackingChannelController(self)
 
         updater.startWatching(cid: cid, isInRecoveryMode: isInRecoveryMode) { error in
             self.state = error.map { .remoteDataFetchFailed(ClientError(with: $0)) } ?? .remoteDataFetched
@@ -1030,7 +1064,7 @@ public class ChatChannelController: DataController, DelegateCallable, DataStoreP
             return
         }
 
-        client.stopTrackingChannelController(self)
+        client.syncRepository.stopTrackingChannelController(self)
 
         updater.stopWatching(cid: cid) { error in
             self.state = error.map { .remoteDataFetchFailed(ClientError(with: $0)) } ?? .localDataFetched
@@ -1171,26 +1205,6 @@ public class ChatChannelController: DataController, DelegateCallable, DataStoreP
 
         return max(0, cooldownDuration - Int(currentTime))
     }
-
-    public func createCall(id: String, type: String, completion: @escaping (Result<CallWithToken, Error>) -> Void) {
-        guard let cid = cid, isChannelAlreadyCreated else {
-            channelModificationFailed { completion(.failure($0 ?? ClientError.ChannelNotCreatedYet())) }
-            return
-        }
-
-        updater.createCall(in: cid, callId: id, type: type) {
-            switch $0 {
-            case let .success(messages):
-                self.callback {
-                    completion(.success(messages))
-                }
-            case let .failure(error):
-                self.callback {
-                    completion(.failure(error))
-                }
-            }
-        }
-    }
     
     /// Deletes a file associated with the given URL in the channel.
     /// - Parameters:
@@ -1238,6 +1252,56 @@ public class ChatChannelController: DataController, DelegateCallable, DataStoreP
             synchronize(isInRecoveryMode: true, completion)
         }
     }
+    
+    func createNewMessage(
+        messageId: MessageId? = nil,
+        text: String,
+        pinning: MessagePinning? = nil,
+        isSilent: Bool = false,
+        attachments: [AnyAttachmentPayload] = [],
+        mentionedUserIds: [UserId] = [],
+        quotedMessageId: MessageId? = nil,
+        skipPush: Bool = false,
+        skipEnrichUrl: Bool = false,
+        extraData: [String: RawJSON] = [:],
+        poll: PollPayload?,
+        completion: ((Result<MessageId, Error>) -> Void)? = nil
+    ) {
+        /// Perform action only if channel is already created on backend side and have a valid `cid`.
+        guard let cid = cid, isChannelAlreadyCreated else {
+            channelModificationFailed { error in
+                completion?(.failure(error ?? ClientError.Unknown()))
+            }
+            return
+        }
+
+        /// Send stop typing event.
+        eventSender.stopTyping(in: cid, parentMessageId: nil)
+
+        updater.createNewMessage(
+            in: cid,
+            messageId: messageId,
+            text: text,
+            pinning: pinning,
+            isSilent: isSilent,
+            command: nil,
+            arguments: nil,
+            attachments: attachments,
+            mentionedUserIds: mentionedUserIds,
+            quotedMessageId: quotedMessageId,
+            skipPush: skipPush,
+            skipEnrichUrl: skipEnrichUrl,
+            poll: poll,
+            extraData: extraData
+        ) { result in
+            if let newMessage = try? result.get() {
+                self.client.eventNotificationCenter.process(NewMessagePendingEvent(message: newMessage))
+            }
+            self.callback {
+                completion?(result.map(\.id))
+            }
+        }
+    }
 
     deinit {
         guard self.isJumpingToMessage, let cid = self.cid else { return }
@@ -1254,7 +1318,6 @@ extension ChatChannelController {
     struct Environment {
         var channelUpdaterBuilder: (
             _ channelRepository: ChannelRepository,
-            _ callRepository: CallRepository,
             _ messageRepository: MessageRepository,
             _ paginationStateHandler: MessagesPaginationStateHandling,
             _ database: DatabaseContainer,
@@ -1406,8 +1469,7 @@ private extension ChatChannelController {
                 return nil
             }
 
-            let observer = EntityDatabaseObserverWrapper(
-                isBackground: StreamRuntimeCheck._isBackgroundMappingEnabled,
+            let observer = BackgroundEntityDatabaseObserver(
                 database: self.client.databaseContainer,
                 fetchRequest: ChannelDTO.fetchRequest(for: cid),
                 itemCreator: { try $0.asModel() as ChatChannel }
@@ -1454,8 +1516,7 @@ private extension ChatChannelController {
             }
 
             let pageSize = channelQuery.pagination?.pageSize ?? .messagesPageSize
-            let observer = ListDatabaseObserverWrapper(
-                isBackground: StreamRuntimeCheck._isBackgroundMappingEnabled,
+            let observer = BackgroundListDatabaseObserver(
                 database: client.databaseContainer,
                 fetchRequest: MessageDTO.messagesFetchRequest(
                     for: cid,
@@ -1464,7 +1525,8 @@ private extension ChatChannelController {
                     deletedMessagesVisibility: deletedMessageVisibility ?? .visibleForCurrentUser,
                     shouldShowShadowedMessages: shouldShowShadowedMessages ?? false
                 ),
-                itemCreator: { try $0.asModel() as ChatMessage }
+                itemCreator: { try $0.asModel() as ChatMessage },
+                itemReuseKeyPaths: (\ChatMessage.id, \MessageDTO.id)
             )
             observer.onDidChange = { [weak self] changes in
                 self?.delegateCallback {
@@ -1539,25 +1601,25 @@ private extension ChatChannelController {
 // MARK: - Errors
 
 extension ClientError {
-    class ChannelNotCreatedYet: ClientError {
+    final class ChannelNotCreatedYet: ClientError {
         override public var localizedDescription: String {
             "You can't modify the channel because the channel hasn't been created yet. Call `synchronize()` to create the channel and wait for the completion block to finish. Alternatively, you can observe the `state` changes of the controller and wait for the `remoteDataFetched` state."
         }
     }
 
-    class ChannelEmptyMembers: ClientError {
+    final class ChannelEmptyMembers: ClientError {
         override public var localizedDescription: String {
             "You can't create direct messaging channel with empty members."
         }
     }
 
-    class ChannelEmptyMessages: ClientError {
+    final class ChannelEmptyMessages: ClientError {
         override public var localizedDescription: String {
             "You can't load new messages when there is no messages in the channel."
         }
     }
 
-    class InvalidCooldownDuration: ClientError {
+    final class InvalidCooldownDuration: ClientError {
         override public var localizedDescription: String {
             "You can't specify a value outside the range 1-120 for cooldown duration."
         }
@@ -1565,7 +1627,7 @@ extension ClientError {
 }
 
 extension ClientError {
-    class ChannelFeatureDisabled: ClientError {}
+    final class ChannelFeatureDisabled: ClientError {}
 }
 
 // MARK: - Deprecations

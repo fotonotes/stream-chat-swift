@@ -38,6 +38,7 @@ final class UserEndpoints_Tests: XCTestCase {
                 typingIndicators: .init(enabled: true),
                 readReceipts: .init(enabled: true)
             ),
+            role: .anonymous,
             extraData: ["company": .string(.unique)]
         )
 
@@ -61,5 +62,22 @@ final class UserEndpoints_Tests: XCTestCase {
 
         XCTAssertEqual(AnyEndpoint(expectedEndpoint), AnyEndpoint(endpoint))
         XCTAssertEqual("users", endpoint.path.value)
+    }
+
+    func test_unread_buildsCorrectly() {
+        let expectedEndpoint = Endpoint<CurrentUserUnreadsPayload>(
+            path: .unread,
+            method: .get,
+            queryItems: nil,
+            requiresConnectionId: false,
+            body: nil
+        )
+
+        // Build endpoint
+        let endpoint: Endpoint<CurrentUserUnreadsPayload> = .unreads()
+
+        // Assert endpoint is built correctly
+        XCTAssertEqual(AnyEndpoint(expectedEndpoint), AnyEndpoint(endpoint))
+        XCTAssertEqual(endpoint.path.value, "unread")
     }
 }

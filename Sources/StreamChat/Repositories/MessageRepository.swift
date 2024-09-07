@@ -88,6 +88,47 @@ class MessageRepository {
             })
         }
     }
+    
+    /// Marks the message's local status to failed and adds it to the offline retry which sends the message when connection comes back.
+    func scheduleOfflineRetry(for messageId: MessageId, completion: @escaping (Result<ChatMessage, MessageRepositoryError>) -> Void) {
+        var dataEndpoint: DataEndpoint!
+        var messageModel: ChatMessage!
+        database.write { session in
+            guard let dto = session.message(id: messageId) else {
+                throw MessageRepositoryError.messageDoesNotExist
+            }
+            guard let channelDTO = dto.channel, let cid = try? ChannelId(cid: channelDTO.cid) else {
+                throw MessageRepositoryError.messageDoesNotHaveValidChannel
+            }
+            
+            // Send the message to offline handling
+            let requestBody = dto.asRequestBody() as MessageRequestBody
+            let endpoint: Endpoint<MessagePayload.Boxed> = .sendMessage(
+                cid: cid,
+                messagePayload: requestBody,
+                skipPush: dto.skipPush,
+                skipEnrichUrl: dto.skipEnrichUrl
+            )
+            dataEndpoint = endpoint.withDataResponse
+            
+            // Mark it as failed
+            dto.localMessageState = .sendingFailed
+            messageModel = try dto.asModel()
+        } completion: { [weak self] writeError in
+            if let writeError {
+                switch writeError {
+                case let repositoryError as MessageRepositoryError:
+                    completion(.failure(repositoryError))
+                default:
+                    completion(.failure(.failedToSendMessage(writeError)))
+                }
+                return
+            }
+            // Offline repository will send it when connection comes back on, until then we show the message as failed
+            self?.apiClient.queueOfflineRequest?(dataEndpoint.withDataResponse)
+            completion(.success(messageModel))
+        }
+    }
 
     func saveSuccessfullySentMessage(
         cid: ChannelId,
@@ -126,11 +167,12 @@ class MessageRepository {
             // error code for duplicated messages.
             let isDuplicatedMessageError = errorPayload.code == 4 && errorPayload.message.contains("already exists")
             if isDuplicatedMessageError {
-                database.write {
+                database.write({
                     let messageDTO = $0.message(id: messageId)
                     messageDTO?.markMessageAsSent()
+                }, completion: { _ in
                     completion(.failure(.failedToSendMessage(error)))
-                }
+                })
                 return
             }
         }
@@ -195,6 +237,8 @@ class MessageRepository {
                 self.database.write({ session in
                     message = try session.saveMessage(payload: boxed.message, for: cid, syncOwnReactions: true, cache: nil).asModel()
                     if !store {
+                        // Force load attachments before discarding changes
+                        _ = message?.attachmentCounts
                         self.database.writableContext.discardCurrentChanges()
                     }
                 }, completion: { error in
@@ -286,19 +330,15 @@ class MessageRepository {
     }
 }
 
-@available(iOS 13.0.0, *)
 extension MessageRepository {
     /// Fetches messages from the database with a date range.
     func messages(from fromDate: Date, to toDate: Date, in cid: ChannelId) async throws -> [ChatMessage] {
-        try await database.read { context in
-            try MessageDTO.loadMessages(
+        try await database.read { session in
+            try session.loadMessages(
                 from: fromDate,
                 to: toDate,
                 in: cid,
-                sortAscending: true,
-                deletedMessagesVisibility: context.deletedMessagesVisibility ?? .alwaysVisible,
-                shouldShowShadowedMessages: context.shouldShowShadowedMessages ?? true,
-                context: context
+                sortAscending: true
             )
             .map { try $0.asModel() }
         }
@@ -306,15 +346,12 @@ extension MessageRepository {
     
     /// Fetches replies from the database with a date range.
     func replies(from fromDate: Date, to toDate: Date, in message: MessageId) async throws -> [ChatMessage] {
-        try await database.read { context in
-            try MessageDTO.loadReplies(
+        try await database.read { session in
+            try session.loadReplies(
                 from: fromDate,
                 to: toDate,
                 in: message,
-                sortAscending: true,
-                deletedMessagesVisibility: context.deletedMessagesVisibility ?? .alwaysVisible,
-                shouldShowShadowedMessages: context.shouldShowShadowedMessages ?? true,
-                context: context
+                sortAscending: true
             )
             .map { try $0.asModel() }
         }

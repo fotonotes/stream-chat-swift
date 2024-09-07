@@ -107,6 +107,25 @@ final class MessageUpdater_Mock: MessageUpdater {
     @Atomic var translate_completion: ((Result<ChatMessage, Error>) -> Void)?
     @Atomic var translate_completion_result: Result<ChatMessage, Error>?
 
+    var markThreadRead_threadId: MessageId?
+    var markThreadRead_cid: ChannelId?
+    var markThreadRead_callCount = 0
+    var markThreadRead_completion: ((Error?) -> Void)? = nil
+
+    var markThreadUnread_threadId: MessageId?
+    var markThreadUnread_cid: ChannelId?
+    var markThreadUnread_callCount = 0
+    var markThreadUnread_completion: ((Error?) -> Void)? = nil
+
+    var updateThread_callCount = 0
+    var updateThread_messageId: MessageId?
+    var updateThread_request: ThreadPartialUpdateRequest?
+    var updateThread_completion: ((Result<ChatThread, any Error>) -> Void)?
+
+    var loadThread_callCount = 0
+    var loadThread_query: ThreadQuery?
+    var loadThread_completion: ((Result<ChatThread, any Error>) -> Void)?
+
     // Cleans up all recorded values
     func cleanUp() {
         getMessage_cid = nil
@@ -199,6 +218,21 @@ final class MessageUpdater_Mock: MessageUpdater {
         translate_language = nil
         translate_completion = nil
         translate_completion_result = nil
+
+        markThreadRead_threadId = nil
+        markThreadRead_cid = nil
+        markThreadRead_completion = nil
+
+        markThreadUnread_threadId = nil
+        markThreadUnread_cid = nil
+        markThreadUnread_completion = nil
+
+        updateThread_messageId = nil
+        updateThread_request = nil
+        updateThread_completion = nil
+
+        loadThread_query = nil
+        loadThread_completion = nil
     }
 
     override func getMessage(cid: ChannelId, messageId: MessageId, completion: ((Result<ChatMessage, Error>) -> Void)? = nil) {
@@ -405,6 +439,40 @@ final class MessageUpdater_Mock: MessageUpdater {
         translate_language = language
         translate_completion = completion
         translate_completion_result?.invoke(with: completion)
+    }
+
+    override func markThreadRead(cid: ChannelId, threadId: MessageId, completion: @escaping (((any Error)?) -> Void)) {
+        markThreadRead_cid = cid
+        markThreadRead_threadId = threadId
+        markThreadRead_callCount += 1
+        markThreadRead_completion = completion
+    }
+
+    override func markThreadUnread(cid: ChannelId, threadId: MessageId, completion: @escaping (((any Error)?) -> Void)) {
+        markThreadUnread_cid = cid
+        markThreadUnread_threadId = threadId
+        markThreadUnread_callCount += 1
+        markThreadUnread_completion = completion
+    }
+
+    override func updateThread(
+        for messageId: MessageId,
+        request: ThreadPartialUpdateRequest,
+        completion: @escaping ((Result<ChatThread, any Error>) -> Void)
+    ) {
+        updateThread_callCount += 1
+        updateThread_messageId = messageId
+        updateThread_request = request
+        updateThread_completion = completion
+    }
+
+    override func loadThread(
+        query: ThreadQuery,
+        completion: @escaping ((Result<ChatThread, any Error>) -> Void)
+    ) {
+        loadThread_callCount += 1
+        loadThread_query = query
+        loadThread_completion = completion
     }
 }
 

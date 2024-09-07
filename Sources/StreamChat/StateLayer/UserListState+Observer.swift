@@ -4,7 +4,6 @@
 
 import Foundation
 
-@available(iOS 13.0, *)
 extension UserListState {
     struct Observer {
         private let query: UserListQuery
@@ -13,9 +12,10 @@ extension UserListState {
         init(query: UserListQuery, database: DatabaseContainer) {
             self.query = query
             usersObserver = StateLayerDatabaseObserver(
-                databaseContainer: database,
+                database: database,
                 fetchRequest: UserDTO.userListFetchRequest(query: query),
-                itemCreator: { try $0.asModel() }
+                itemCreator: { try $0.asModel() },
+                itemReuseKeyPaths: (\ChatUser.id, \UserDTO.id)
             )
         }
         

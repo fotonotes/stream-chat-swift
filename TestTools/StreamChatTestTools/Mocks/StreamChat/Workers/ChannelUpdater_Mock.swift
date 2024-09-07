@@ -134,7 +134,6 @@ final class ChannelUpdater_Mock: ChannelUpdater {
     @Atomic var loadPinnedMessages_completion_result: Result<[ChatMessage], Error>?
 
     @Atomic var createCall_cid: ChannelId?
-    @Atomic var createCall_completion: ((Result<CallWithToken, Error>) -> Void)?
 
     @Atomic var enrichUrl_url: URL?
     @Atomic var enrichUrl_callCount = 0
@@ -262,7 +261,6 @@ final class ChannelUpdater_Mock: ChannelUpdater {
         loadPinnedMessages_completion_result = nil
 
         createCall_cid = nil
-        createCall_completion = nil
 
         enrichUrl_url = nil
         enrichUrl_completion = nil
@@ -352,6 +350,7 @@ final class ChannelUpdater_Mock: ChannelUpdater {
         quotedMessageId: MessageId?,
         skipPush: Bool,
         skipEnrichUrl: Bool,
+        poll: PollPayload?,
         extraData: [String: RawJSON] = [:],
         completion: ((Result<ChatMessage, Error>) -> Void)? = nil
     ) {
@@ -504,16 +503,6 @@ final class ChannelUpdater_Mock: ChannelUpdater {
         loadPinnedMessages_query = query
         loadPinnedMessages_completion = completion
         loadPinnedMessages_completion_result?.invoke(with: completion)
-    }
-
-    override func createCall(
-        in cid: ChannelId,
-        callId: String,
-        type: String,
-        completion: @escaping ((Result<CallWithToken, Error>) -> Void)
-    ) {
-        createCall_cid = cid
-        createCall_completion = completion
     }
 
     override func enrichUrl(_ url: URL, completion: @escaping (Result<LinkAttachmentPayload, Error>) -> Void) {

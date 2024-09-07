@@ -118,13 +118,18 @@ class MessageUpdater: Worker {
             let messageDTO = try session.messageEditableByCurrentUser(messageId)
 
             func updateMessage(localState: LocalMessageState) throws {
+                let newUpdatedAt = DBDate()
+                
+                if messageDTO.text != text {
+                    messageDTO.textUpdatedAt = newUpdatedAt
+                }
+                messageDTO.updatedAt = newUpdatedAt
+                
                 messageDTO.text = text
                 let encodedExtraData = extraData.map { try? JSONEncoder.default.encode($0) } ?? messageDTO.extraData
                 messageDTO.extraData = encodedExtraData
 
                 messageDTO.localMessageState = localState
-
-                messageDTO.updatedAt = DBDate()
 
                 messageDTO.skipEnrichUrl = skipEnrichUrl
 
@@ -229,6 +234,7 @@ class MessageUpdater: Worker {
                 createdAt: nil,
                 skipPush: skipPush,
                 skipEnrichUrl: skipEnrichUrl,
+                poll: nil,
                 extraData: extraData
             )
 
@@ -739,6 +745,66 @@ class MessageUpdater: Worker {
             }
         })
     }
+
+    func markThreadRead(
+        cid: ChannelId,
+        threadId: MessageId,
+        completion: @escaping ((Error?) -> Void)
+    ) {
+        apiClient.request(
+            endpoint: .markThreadRead(cid: cid, threadId: threadId)
+        ) { result in
+            completion(result.error)
+        }
+    }
+
+    func markThreadUnread(
+        cid: ChannelId,
+        threadId: MessageId,
+        completion: @escaping ((Error?) -> Void)
+    ) {
+        apiClient.request(
+            endpoint: .markThreadUnread(cid: cid, threadId: threadId)
+        ) { result in
+            completion(result.error)
+        }
+    }
+
+    func loadThread(query: ThreadQuery, completion: @escaping ((Result<ChatThread, Error>) -> Void)) {
+        apiClient.request(endpoint: .thread(query: query)) { result in
+            switch result {
+            case .success(let response):
+                self.database.write { session in
+                    let thread = try session.saveThread(payload: response.thread, cache: nil).asModel()
+                    completion(.success(thread))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    func updateThread(
+        for messageId: MessageId,
+        request: ThreadPartialUpdateRequest,
+        completion: @escaping ((Result<ChatThread, Error>) -> Void)
+    ) {
+        apiClient.request(
+            endpoint: .partialThreadUpdate(
+                messageId: messageId,
+                request: request
+            )) { result in
+            switch result {
+            case .success(let response):
+                self.database.write { session in
+                    let thread = try session.saveThread(partialPayload: response.thread).asModel()
+                    completion(.success(thread))
+                }
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
 }
 
 extension MessageUpdater {
@@ -773,13 +839,13 @@ private extension MessageUpdater {
 }
 
 extension ClientError {
-    class MessageDoesNotExist: ClientError {
+    final class MessageDoesNotExist: ClientError {
         init(messageId: MessageId) {
             super.init("There is no `MessageDTO` instance in the DB matching id: \(messageId).")
         }
     }
 
-    class MessageEditing: ClientError {
+    final class MessageEditing: ClientError {
         init(messageId: String, reason: String) {
             super.init("Message with id: \(messageId) can't be edited (\(reason)")
         }
@@ -807,7 +873,6 @@ private extension DatabaseSession {
     }
 }
 
-@available(iOS 13.0, *)
 extension MessageUpdater {
     func addReaction(
         _ type: MessageReactionType,

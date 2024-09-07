@@ -69,10 +69,9 @@ public class ChatChannelListController: DataController, DelegateCallable, DataSt
         }
     }
 
-    private(set) lazy var channelListObserver: ListDatabaseObserverWrapper<ChatChannel, ChannelDTO> = {
+    private(set) lazy var channelListObserver: BackgroundListDatabaseObserver<ChatChannel, ChannelDTO> = {
         let request = ChannelDTO.channelListFetchRequest(query: self.query, chatClientConfig: client.config)
         let observer = self.environment.createChannelListDatabaseObserver(
-            StreamRuntimeCheck._isBackgroundMappingEnabled,
             client.databaseContainer,
             request,
             { try $0.asModel() },
@@ -108,7 +107,6 @@ public class ChatChannelListController: DataController, DelegateCallable, DataSt
     /// An internal backing object for all publicly available Combine publishers. We use it to simplify the way we expose
     /// publishers. Instead of creating custom `Publisher` types, we use `CurrentValueSubject` and `PassthroughSubject` internally,
     /// and expose the published values by mapping them to a read-only `AnyPublisher` type.
-    @available(iOS 13, *)
     var basePublishers: BasePublishers {
         if let value = _basePublishers as? BasePublishers {
             return value
@@ -146,7 +144,7 @@ public class ChatChannelListController: DataController, DelegateCallable, DataSt
     override public func synchronize(_ completion: ((_ error: Error?) -> Void)? = nil) {
         startChannelListObserverIfNeeded()
         channelListLinker.start(with: client.eventNotificationCenter)
-        client.startTrackingChannelListController(self)
+        client.syncRepository.startTrackingChannelListController(self)
         updateChannelList(completion)
     }
 
@@ -193,6 +191,11 @@ public class ChatChannelListController: DataController, DelegateCallable, DataSt
 
     // MARK: - Internal
 
+    func refreshLoadedChannels(completion: @escaping (Result<Set<ChannelId>, Error>) -> Void) {
+        let channelCount = channelListObserver.items.count
+        worker.refreshLoadedChannels(for: query, channelCount: channelCount, completion: completion)
+    }
+    
     func resetQuery(
         watchedAndSynchedChannelIds: Set<ChannelId>,
         synchedChannelIds: Set<ChannelId>,
@@ -226,9 +229,7 @@ public class ChatChannelListController: DataController, DelegateCallable, DataSt
         ) { [weak self] result in
             switch result {
             case let .success(channels):
-                self?.channelListObserver.refreshItems { [weak self] in
-                    self?.state = .remoteDataFetched
-                }
+                self?.state = .remoteDataFetched
                 self?.hasLoadedAllPreviousChannels = channels.count < limit
                 self?.callback { completion?(nil) }
             case let .failure(error):
@@ -272,14 +273,19 @@ extension ChatChannelListController {
         ) -> ChannelListLinker = ChannelListLinker.init
         
         var createChannelListDatabaseObserver: (
-            _ isBackground: Bool,
             _ database: DatabaseContainer,
             _ fetchRequest: NSFetchRequest<ChannelDTO>,
             _ itemCreator: @escaping (ChannelDTO) throws -> ChatChannel,
             _ sorting: [SortValue<ChatChannel>]
         )
-            -> ListDatabaseObserverWrapper<ChatChannel, ChannelDTO> = {
-                ListDatabaseObserverWrapper(isBackground: $0, database: $1, fetchRequest: $2, itemCreator: $3, sorting: $4)
+            -> BackgroundListDatabaseObserver<ChatChannel, ChannelDTO> = {
+                BackgroundListDatabaseObserver(
+                    database: $0,
+                    fetchRequest: $1,
+                    itemCreator: $2,
+                    itemReuseKeyPaths: (\ChatChannel.cid.rawValue, \ChannelDTO.cid),
+                    sorting: $3
+                )
             }
     }
 }
@@ -322,7 +328,7 @@ public extension ChatChannelListControllerDelegate {
 }
 
 extension ClientError {
-    public class FetchFailed: Error {
-        public var localizedDescription: String = "Failed to perform fetch request. This is an internal error."
+    public final class FetchFailed: Error {
+        public let localizedDescription: String = "Failed to perform fetch request. This is an internal error."
     }
 }

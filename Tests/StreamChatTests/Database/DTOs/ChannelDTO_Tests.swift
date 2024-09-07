@@ -1101,6 +1101,7 @@ final class ChannelDTO_Tests: XCTestCase {
             members: [.dummy(user: currentUserPayload)],
             membership: .dummy(user: currentUserPayload),
             messages: [messageMentioningCurrentUser],
+            pendingMessages: nil,
             pinnedMessages: [],
             channelReads: [currentUserChannelReadPayload],
             isHidden: false
@@ -1126,6 +1127,52 @@ final class ChannelDTO_Tests: XCTestCase {
         // THEN
         XCTAssertEqual(unreadCount.messages, unreadMessages)
         XCTAssertEqual(unreadCount.mentions, 1)
+    }
+    
+    func test_channelMembersIsUsedOverMembership_whenNotificationsMutedIsIncorrect() throws {
+        // Issue where membership.notificationsMuted is incorrect
+        let cid = ChannelId.unique
+        let userId: UserId = .unique
+        let user = UserPayload.dummy(userId: userId)
+        let memberPayload = MemberPayload(
+            user: user,
+            userId: user.id,
+            role: nil,
+            createdAt: .unique,
+            updatedAt: .unique,
+            notificationsMuted: true
+        )
+        let membershipPayload = MemberPayload(
+            user: user,
+            userId: user.id,
+            role: nil,
+            createdAt: .unique,
+            updatedAt: .unique,
+            notificationsMuted: false // incorrectly false
+        )
+        let channelPayload = ChannelPayload(
+            channel: .dummy(cid: cid),
+            watcherCount: nil,
+            watchers: nil,
+            members: [memberPayload],
+            membership: membershipPayload,
+            messages: [],
+            pendingMessages: nil,
+            pinnedMessages: [],
+            channelReads: [],
+            isHidden: nil
+        )
+        try database.writeSynchronously { session in
+            try session.saveChannel(payload: channelPayload)
+        }
+        
+        var channelMember: ChatChannelMember?
+        let session = database.backgroundReadOnlyContext
+        session.performAndWait {
+            channelMember = try? session.member(userId: userId, cid: cid)?.asModel()
+        }
+        let member = try XCTUnwrap(channelMember)
+        XCTAssertEqual(true, member.notificationsMuted)
     }
 
     func test_typingUsers_areCleared_onResetEphemeralValues() throws {
@@ -1277,7 +1324,7 @@ final class ChannelDTO_Tests: XCTestCase {
         XCTAssertEqual(channel.unreadCount.messages, 0)
     }
 
-    func test_asModel_populatesLatestMessage() throws {
+    func test_asModel_populatesLatestMessage_withoutFilteringDeletedMessages() throws {
         // GIVEN
         database = DatabaseContainer_Spy(
             kind: .inMemory,
@@ -1366,21 +1413,13 @@ final class ChannelDTO_Tests: XCTestCase {
         // THEN
         XCTAssertEqual(
             Set(channel.latestMessages.map(\.id)),
-            Set([message1.id, deletedMessageFromCurrentUser.id, shadowedMessageFromAnotherUser.id])
+            Set([message1.id, deletedMessageFromCurrentUser.id, deletedMessageFromAnotherUser.id])
         )
     }
 
     // MARK: Max depth
 
     func test_asModel_onlyFetchesUntilCertainRelationship() throws {
-        let originalIsBackgroundMappingEnabled = StreamRuntimeCheck._isBackgroundMappingEnabled
-        try test_asModel_onlyFetchesUntilCertainRelationship(isBackgroundMappingEnabled: false)
-        try test_asModel_onlyFetchesUntilCertainRelationship(isBackgroundMappingEnabled: true)
-        StreamRuntimeCheck._isBackgroundMappingEnabled = originalIsBackgroundMappingEnabled
-    }
-
-    private func test_asModel_onlyFetchesUntilCertainRelationship(isBackgroundMappingEnabled: Bool) throws {
-        StreamRuntimeCheck._isBackgroundMappingEnabled = isBackgroundMappingEnabled
         let cid = ChannelId.unique
 
         // GIVEN
@@ -1425,12 +1464,8 @@ final class ChannelDTO_Tests: XCTestCase {
         XCTAssertEqual(quoted2Message.id, quoted2MessagePayload.id)
 
         let quoted3Message = quoted2Message.quotedMessage
-        if isBackgroundMappingEnabled {
-            // 3rd level of depth is not mapped
-            XCTAssertNil(quoted3Message)
-        } else {
-            XCTAssertEqual(quoted3Message?.id, quoted3MessagePayload.id)
-        }
+        // 3rd level of depth is not mapped
+        XCTAssertNil(quoted3Message)
     }
 }
 

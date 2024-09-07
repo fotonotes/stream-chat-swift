@@ -2665,6 +2665,151 @@ final class MessageUpdater_Tests: XCTestCase {
 
         AssertAsync.willBeTrue(completionCalled)
     }
+
+    // MARK: - Mark read
+
+    func test_markThreadRead_whenSuccess() throws {
+        let exp = expectation(description: "mark thread completion")
+        let threadId = MessageId.unique
+        let cid = ChannelId.unique
+
+        messageUpdater.markThreadRead(cid: cid, threadId: threadId) { error in
+            XCTAssertNil(error)
+            exp.fulfill()
+        }
+
+        apiClient.test_simulateResponse(.success(EmptyResponse()))
+
+        wait(for: [exp], timeout: defaultTimeout)
+
+        XCTAssertEqual(apiClient.request_endpoint, AnyEndpoint(.markThreadRead(cid: cid, threadId: threadId)))
+    }
+
+    func test_markThreadRead_whenFailure() throws {
+        let exp = expectation(description: "mark thread completion")
+        let threadId = MessageId.unique
+        let cid = ChannelId.unique
+
+        messageUpdater.markThreadRead(cid: cid, threadId: threadId) { error in
+            XCTAssertNotNil(error)
+            exp.fulfill()
+        }
+
+        let response = Result<EmptyResponse, Error>.failure(TestError())
+        apiClient.test_simulateResponse(response)
+
+        wait(for: [exp], timeout: defaultTimeout)
+
+        XCTAssertEqual(apiClient.request_endpoint, AnyEndpoint(.markThreadRead(cid: cid, threadId: threadId)))
+    }
+
+    // MARK: Mark unread
+
+    func test_markThreadUnread_whenSuccess() throws {
+        let exp = expectation(description: "mark thread completion")
+        let threadId = MessageId.unique
+        let cid = ChannelId.unique
+
+        messageUpdater.markThreadUnread(cid: cid, threadId: threadId) { error in
+            XCTAssertNil(error)
+            exp.fulfill()
+        }
+
+        apiClient.test_simulateResponse(.success(EmptyResponse()))
+
+        wait(for: [exp], timeout: defaultTimeout)
+
+        XCTAssertEqual(apiClient.request_endpoint, AnyEndpoint(.markThreadUnread(cid: cid, threadId: threadId)))
+    }
+
+    func test_markThreadUnread_whenFailure() throws {
+        let exp = expectation(description: "mark thread completion")
+        let threadId = MessageId.unique
+        let cid = ChannelId.unique
+
+        messageUpdater.markThreadUnread(cid: cid, threadId: threadId) { error in
+            XCTAssertNotNil(error)
+            exp.fulfill()
+        }
+
+        let response = Result<EmptyResponse, Error>.failure(TestError())
+        apiClient.test_simulateResponse(response)
+
+        wait(for: [exp], timeout: defaultTimeout)
+
+        XCTAssertEqual(apiClient.request_endpoint, AnyEndpoint(.markThreadUnread(cid: cid, threadId: threadId)))
+    }
+
+    // MARK: updateThread
+
+    func test_updateThread_whenSuccess() throws {
+        let exp = expectation(description: "update thread completion")
+        let threadId = MessageId.unique
+
+        messageUpdater.updateThread(
+            for: threadId,
+            request: ThreadPartialUpdateRequest(set: .init(title: "test"))
+        ) { result in
+            XCTAssertNil(result.error)
+            XCTAssertEqual(result.value?.parentMessageId, threadId)
+            exp.fulfill()
+        }
+
+        apiClient.test_simulateResponse(.success(ThreadPartialUpdateResponse(thread: .dummy(parentMessageId: threadId))))
+
+        wait(for: [exp], timeout: defaultTimeout)
+    }
+
+    func test_updateThread_whenFailure() throws {
+        let exp = expectation(description: "update thread completion")
+        let threadId = MessageId.unique
+
+        messageUpdater.updateThread(
+            for: threadId,
+            request: ThreadPartialUpdateRequest(set: .init(title: "test"))
+        ) { result in
+            XCTAssertNotNil(result.error)
+            exp.fulfill()
+        }
+
+        let response = Result<ThreadPartialUpdateResponse, Error>.failure(TestError())
+        apiClient.test_simulateResponse(response)
+
+        wait(for: [exp], timeout: defaultTimeout)
+    }
+
+    // MARK: loadThread
+
+    func test_loadThread_whenSuccess() throws {
+        let exp = expectation(description: "load thread completion")
+        let threadId = MessageId.unique
+
+        messageUpdater.loadThread(query: .init(messageId: threadId)) { result in
+            XCTAssertNil(result.error)
+            XCTAssertEqual(result.value?.parentMessageId, threadId)
+            XCTAssertEqual(result.value?.title, "TEST")
+            exp.fulfill()
+        }
+
+        apiClient.test_simulateResponse(.success(ThreadPayloadResponse(thread: .dummy(parentMessageId: threadId, title: "TEST"))))
+
+        wait(for: [exp], timeout: defaultTimeout)
+    }
+
+    func test_loadThread_whenFailure() throws {
+        let exp = expectation(description: "load thread completion")
+        let threadId = MessageId.unique
+
+        messageUpdater.loadThread(query: .init(messageId: threadId)) { result in
+            XCTAssertNotNil(result.error)
+            exp.fulfill()
+        }
+
+        let response = Result<ThreadPayloadResponse, Error>.failure(TestError())
+        apiClient.test_simulateResponse(response)
+
+        wait(for: [exp], timeout: defaultTimeout)
+    }
 }
 
 // MARK: - Helpers
@@ -2709,6 +2854,14 @@ extension MessageUpdater_Tests {
         line: UInt = #line,
         file: StaticString = #filePath
     ) throws {
+        func showsInsideThread(messageIds: [MessageId]) throws -> [Bool] {
+            try database.readSynchronously { session in
+                messageIds
+                    .compactMap { session.message(id: $0) }
+                    .map(\.showInsideThread)
+            }
+        }
+        
         let parentMessageId = MessageId.unique
         let currentUserId: UserId = .unique
         let currentMessageIds: [MessageId] = [.unique, .unique, .unique]
@@ -2737,11 +2890,7 @@ extension MessageUpdater_Tests {
             }
         }
 
-        var currentMessageDTOs: [MessageDTO] {
-            currentMessageIds.compactMap { database.viewContext.message(id: $0) }
-        }
-
-        XCTAssertEqual(currentMessageDTOs.map(\.showInsideThread), [true, true, true])
+        try XCTAssertEqual(showsInsideThread(messageIds: currentMessageIds), [true, true, true])
 
         // Simulate `loadReplies` call
         let exp = expectation(description: "should load replies")
@@ -2757,19 +2906,30 @@ extension MessageUpdater_Tests {
 
         waitForExpectations(timeout: defaultTimeout)
 
-        var newMessageDTOs: [MessageDTO] {
-            messageIds.compactMap { database.viewContext.message(id: $0) }
-        }
-
         if shouldClear {
             // Previous current messages are not shown (excluding local messages).
-            XCTAssertEqual(currentMessageDTOs.filter { $0.showInsideThread }.count, 1, file: file, line: line)
+            try XCTAssertEqual(
+                showsInsideThread(messageIds: currentMessageIds).filter { $0 }.count,
+                1,
+                file: file,
+                line: line
+            )
         } else {
             // Previous current messages are not discarded.
-            XCTAssertEqual(currentMessageDTOs.map(\.showInsideThread), [true, true, true], file: file, line: line)
+            try XCTAssertEqual(
+                showsInsideThread(messageIds: currentMessageIds),
+                [true, true, true],
+                file: file,
+                line: line
+            )
         }
 
         // Newly fetched messages are shown.
-        XCTAssertEqual(newMessageDTOs.map(\.showInsideThread), [true, true, true], file: file, line: line)
+        try XCTAssertEqual(
+            showsInsideThread(messageIds: messageIds),
+            [true, true, true],
+            file: file,
+            line: line
+        )
     }
 }

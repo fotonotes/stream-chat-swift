@@ -6,7 +6,6 @@ import Combine
 import Foundation
 
 /// An object which represents a `ChatChannel`.
-@available(iOS 13.0, *)
 public class Chat {
     private let channelUpdater: ChannelUpdater
     private let client: ChatClient
@@ -30,7 +29,6 @@ public class Chat {
         databaseContainer = client.databaseContainer
         channelUpdater = environment.channelUpdaterBuilder(
             client.channelRepository,
-            client.callRepository,
             client.messageRepository,
             client.makeMessagesPaginationStateHandler(),
             client.databaseContainer,
@@ -89,6 +87,7 @@ public class Chat {
             channelQuery: query,
             memberSorting: state.memberSorting
         )
+        client.syncRepository.startTrackingChat(self)
         // cid is retrieved from the server when we are creating new channels or there is no local state present
         guard query.cid != payload.channel.cid else { return }
         await state.setChannelId(payload.channel.cid)
@@ -104,8 +103,8 @@ public class Chat {
     ///
     /// - Throws: An error while communicating with the Stream API.
     public func watch() async throws {
-        // Note that watching is started in ChatClient+Chat when channel updater's update is called.
         try await channelUpdater.startWatching(cid: cid, isInRecoveryMode: false)
+        client.syncRepository.startTrackingChat(self)
     }
     
     /// Stop watching the channel which disables server-side events.
@@ -115,6 +114,7 @@ public class Chat {
     /// - Throws: An error while communicating with the Stream API.
     public func stopWatching() async throws {
         try await channelUpdater.stopWatching(cid: cid)
+        client.syncRepository.stopTrackingChat(self)
     }
     
     // MARK: - Deleting the Channel
@@ -1314,7 +1314,6 @@ public class Chat {
 
 // MARK: - Internal
 
-@available(iOS 13.0, *)
 extension Chat {
     @MainActor var cid: ChannelId {
         get throws {
@@ -1362,7 +1361,6 @@ extension Chat {
 
 // MARK: - Environment
 
-@available(iOS 13.0, *)
 extension Chat {
     struct Environment {
         var chatStateBuilder: @MainActor(
@@ -1385,7 +1383,6 @@ extension Chat {
         
         var channelUpdaterBuilder: (
             _ channelRepository: ChannelRepository,
-            _ callRepository: CallRepository,
             _ messageRepository: MessageRepository,
             _ paginationStateHandler: MessagesPaginationStateHandling,
             _ database: DatabaseContainer,
@@ -1419,22 +1416,5 @@ extension Chat {
             _ database: DatabaseContainer,
             _ apiClient: APIClient
         ) -> TypingEventsSender = TypingEventsSender.init
-    }
-}
-
-// MARK: - Chat Client
-
-private extension ChatClient {
-    func backgroundWorker<T>(of type: T.Type) throws -> T {
-        if let worker = backgroundWorkers.compactMap({ $0 as? T }).first {
-            return worker
-        }
-        if currentUserId == nil {
-            throw ClientError.CurrentUserDoesNotExist()
-        }
-        if !config.isClientInActiveMode {
-            throw ClientError.ClientIsNotInActiveMode()
-        }
-        throw ClientError("Background worker of type \(T.self) is not set up")
     }
 }

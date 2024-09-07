@@ -49,7 +49,7 @@ final class CurrentUserController_Tests: XCTestCase {
 
     func test_currentUser_startsObserving_returnsCurrentUserObserverItem() {
         let expectedId = UserId.unique
-        let expectedUnreadCount = UnreadCount(channels: .unique, messages: .unique)
+        let expectedUnreadCount = UnreadCount(channels: .unique, messages: .unique, threads: .unique)
 
         env.currentUserObserverItem = .mock(id: expectedId, unreadCount: expectedUnreadCount)
 
@@ -61,7 +61,7 @@ final class CurrentUserController_Tests: XCTestCase {
 
     func test_synchronize_localDataIsAvailable() {
         let expectedId = UserId.unique
-        let expectedUnreadCount = UnreadCount(channels: .unique, messages: .unique)
+        let expectedUnreadCount = UnreadCount(channels: .unique, messages: .unique, threads: .unique)
 
         env.currentUserObserverItem = .mock(id: expectedId, unreadCount: expectedUnreadCount)
 
@@ -261,7 +261,7 @@ final class CurrentUserController_Tests: XCTestCase {
         // Call synchronize to get updates from DB
         controller.synchronize()
 
-        let unreadCount = UnreadCount(channels: 10, messages: 15)
+        let unreadCount = UnreadCountPayload(channels: 10, messages: 15, threads: 10)
 
         // Set the delegate
         let delegate = UserController_Delegate(expectedQueueId: callbackQueueID)
@@ -277,8 +277,11 @@ final class CurrentUserController_Tests: XCTestCase {
             try $0.saveCurrentUser(payload: currentUserPayload)
         }
 
+        wait(for: [delegate.didChangeCurrentUserUnreadCountExpectation], timeout: defaultTimeout)
+        
         // Assert delegate received correct unread count
-        AssertAsync.willBeEqual(delegate.didChangeCurrentUserUnreadCount_count, unreadCount)
+        let delegateUnreadCount = delegate.didChangeCurrentUserUnreadCount_count
+        XCTAssertTrue(delegateUnreadCount?.isEqual(toPayload: unreadCount) == true)
     }
 
     // MARK: - Updating current user
@@ -752,7 +755,7 @@ final class CurrentUserController_Tests: XCTestCase {
 }
 
 private class TestEnvironment {
-    var currentUserObserver: EntityDatabaseObserver_Mock<CurrentChatUser, CurrentUserDTO>!
+    var currentUserObserver: BackgroundEntityDatabaseObserver_Mock<CurrentChatUser, CurrentUserDTO>!
     var currentUserObserverItem: CurrentChatUser?
     var currentUserObserverStartUpdatingError: Error?
 
@@ -760,7 +763,7 @@ private class TestEnvironment {
 
     lazy var currentUserControllerEnvironment: CurrentChatUserController
         .Environment = .init(currentUserObserverBuilder: { [unowned self] in
-            self.currentUserObserver = .init(context: $0, fetchRequest: $1, itemCreator: $2, fetchedResultsControllerType: $3)
+            self.currentUserObserver = .init(database: $0, fetchRequest: $1, itemCreator: $2, fetchedResultsControllerType: $3)
             self.currentUserObserver.synchronizeError = self.currentUserObserverStartUpdatingError
             self.currentUserObserver.item_mock = self.currentUserObserverItem
             return self.currentUserObserver!

@@ -16,6 +16,7 @@ class BackgroundDatabaseObserver<Item, DTO: NSManagedObject> {
 
     /// Used to convert the `DTO`s to the resulting `Item`s.
     private let itemCreator: (DTO) throws -> Item
+    private let itemReuseKeyPaths: (item: KeyPath<Item, String>, dto: KeyPath<DTO, String>)?
     private let sorting: [SortValue<Item>]
 
     /// Used to observe the changes in the DB.
@@ -27,26 +28,37 @@ class BackgroundDatabaseObserver<Item, DTO: NSManagedObject> {
     /// When called, notification observers are released
     var releaseNotificationObservers: (() -> Void)?
 
-    private let queue = DispatchQueue(label: "io.getstream.list-database-observer", qos: .userInitiated, attributes: .concurrent)
-    private let processingQueue: OperationQueue
-
-    private var _items: [Item] = []
+    private let queue = DispatchQueue(label: "io.getstream.list-database-observer", qos: .userInitiated)
+    private var _items: [Item]?
+    
+    // State handling for supporting will change, because in the callback we should return the previous state.
+    private var _willChangeItems: [Item]?
+    private var _notifyingWillChange = false
 
     /// The items that have been fetched and mapped
     var rawItems: [Item] {
-        queue.sync { _items }
+        // During the onWillChange we swap the results back to the previous state because onWillChange
+        // is dispatched to the main thread and when the main thread handles it, observer has already processed
+        // the database change.
+        if onWillChange != nil {
+            let willChangeState: (active: Bool, cachedItems: [Item]?) = queue.sync { (_notifyingWillChange, _willChangeItems) }
+            if willChangeState.active {
+                return willChangeState.cachedItems ?? []
+            }
+        }
+        
+        var rawItems: [Item]!
+        frc.managedObjectContext.performAndWait {
+            // When we already have loaded items, reuse them, otherwise refetch all
+            rawItems = _items ?? updateItems(nil)
+        }
+        return rawItems
     }
-
+    
     private var _isInitialized: Bool = false
     private var isInitialized: Bool {
         get { queue.sync { _isInitialized } }
-        set { queue.async(flags: .barrier) { self._isInitialized = newValue } }
-    }
-
-    private var _isDeletingDatabase: Bool = false
-    private var isDeletingDatabase: Bool {
-        get { queue.sync { _isDeletingDatabase }}
-        set { queue.async(flags: .barrier) { self._isDeletingDatabase = newValue } }
+        set { queue.async { self._isInitialized = newValue } }
     }
 
     deinit {
@@ -64,6 +76,7 @@ class BackgroundDatabaseObserver<Item, DTO: NSManagedObject> {
     ///   - fetchRequest: The `NSFetchRequest` that specifies the elements of the list.
     ///   - context: The `NSManagedObjectContext` the observer observes.
     ///   - itemCreator: A closure the observer uses to convert DTO objects into Model objects.
+    ///   - itemReuseKeyPaths: A pair of keypaths used for reusing existing items if they have not changed
     ///   - sorting: An array of SortValue that define the order of the elements in the list.
     ///   - fetchedResultsControllerType: The `NSFetchedResultsController` subclass the observer uses to create its FRC. You can
     ///    inject your custom subclass if needed, i.e. when testing.
@@ -71,10 +84,12 @@ class BackgroundDatabaseObserver<Item, DTO: NSManagedObject> {
         context: NSManagedObjectContext,
         fetchRequest: NSFetchRequest<DTO>,
         itemCreator: @escaping (DTO) throws -> Item,
+        itemReuseKeyPaths: (item: KeyPath<Item, String>, dto: KeyPath<DTO, String>)? = nil,
         sorting: [SortValue<Item>],
         fetchedResultsControllerType: NSFetchedResultsController<DTO>.Type
     ) {
         self.itemCreator = itemCreator
+        self.itemReuseKeyPaths = itemReuseKeyPaths
         self.sorting = sorting
         changeAggregator = ListChangeAggregator<DTO, Item>(itemCreator: itemCreator)
         frc = fetchedResultsControllerType.init(
@@ -83,26 +98,21 @@ class BackgroundDatabaseObserver<Item, DTO: NSManagedObject> {
             sectionNameKeyPath: nil,
             cacheName: nil
         )
-
-        let operationQueue = OperationQueue()
-        operationQueue.underlyingQueue = queue
-        operationQueue.name = "com.stream.database-observer"
-        operationQueue.maxConcurrentOperationCount = 1
-        processingQueue = operationQueue
-
         changeAggregator.onWillChange = { [weak self] in
             self?.notifyWillChange()
         }
-
         changeAggregator.onDidChange = { [weak self] changes in
-            self?.updateItems(changes: changes)
+            guard let self else { return }
+            // Runs on the NSManagedObjectContext's queue, therefore skip performAndWait
+            self.updateItems(changes)
+            self.notifyDidChange(changes: changes)
         }
     }
 
     /// Starts observing the changes in the database.
     /// - Throws: An error if the fetch  fails.
     func startObserving() throws {
-        guard !isInitialized && !isDeletingDatabase else { return }
+        guard !isInitialized else { return }
         isInitialized = true
 
         do {
@@ -114,94 +124,64 @@ class BackgroundDatabaseObserver<Item, DTO: NSManagedObject> {
 
         frc.delegate = changeAggregator
 
-        /// Because this observer does not get items synchronously, we start a process to get the items, which will then notify via its blocks.
-        getInitialItems()
-    }
-
-    private func notifyWillChange() {
-        guard let onWillChange = onWillChange else { return }
-        DispatchQueue.main.async {
-            onWillChange()
+        // Start loading initial items and call did change for the initial change.
+        frc.managedObjectContext.perform { [weak self] in
+            guard let self else { return }
+            let items = self.updateItems(nil)
+            let changes: [ListChange<Item>] = items.enumerated().map { .insert($1, index: IndexPath(item: $0, section: 0)) }
+            self.notifyDidChange(changes: changes)
         }
     }
 
-    private func notifyDidChange(changes: [ListChange<Item>], onCompletion: @escaping () -> Void) {
+    private func notifyWillChange() {
+        guard let onWillChange = onWillChange else {
+            return
+        }
+        // Will change callback happens on the main thread but by that time the observer
+        // has already updated its local cached state. For allowing to access the previous
+        // state from the will change callback, there is no other way than caching previous state.
+        // This is used by the channel list delegate.
+        
+        // `_items` is mutated by the NSManagedObjectContext's queue, here we are on that queue
+        // so it is safe to read the `_items` state from `self.queue`.
+        queue.sync {
+            _willChangeItems = _items
+        }
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.queue.async {
+                self._notifyingWillChange = true
+            }
+            onWillChange()
+            self.queue.async {
+                self._willChangeItems = nil
+                self._notifyingWillChange = false
+            }
+        }
+    }
+
+    private func notifyDidChange(changes: [ListChange<Item>]) {
         guard let onDidChange = onDidChange else {
-            onCompletion()
             return
         }
         DispatchQueue.main.async {
             onDidChange(changes)
-            onCompletion()
         }
     }
-
-    private func getInitialItems() {
-        notifyWillChange()
-        updateItems(changes: nil)
-    }
-
-    /// This method will add a new operation to the `processingQueue`, where operations are executed one-by-one.
-    /// The operation added to the queue will start the process of getting new results for the observer.
-    func updateItems(changes: [ListChange<Item>]?, completion: (() -> Void)? = nil) {
-        let operation = AsyncOperation { [weak self] _, done in
-            guard let self = self else {
-                done(.continue)
-                completion?()
-                return
-            }
-
-            self.frc.managedObjectContext.perform {
-                self.processItems(changes) {
-                    done(.continue)
-                    completion?()
-                }
-            }
-        }
-
-        processingQueue.addOperation(operation)
-    }
-
-    /// This method will process  the currently fetched objects, and will notify the listeners.
-    /// When the process is done, it also updates the `_items`, which is the locally cached list of mapped items
-    /// This method will be called through an operation on `processingQueue`, which will serialize the execution until `onCompletion` is called.
-    private func processItems(_ changes: [ListChange<Item>]?, onCompletion: @escaping () -> Void) {
-        mapItems { [weak self] items in
-            guard let self = self else {
-                onCompletion()
-                return
-            }
-
-            /// We want to make sure that nothing else but this block is happening in this queue when updating `_items`
-            /// This also includes finishing the operation and notifying about the update. Only once everything is done, we conclude the operation.
-            self.queue.async(flags: .barrier) {
-                self._items = items
-                let returnedChanges = changes ?? items.enumerated().map { .insert($1, index: IndexPath(item: $0, section: 0)) }
-                self.notifyDidChange(changes: returnedChanges, onCompletion: onCompletion)
-            }
-        }
-    }
-
-    /// This method will asynchronously convert all the fetched objects into models.
-    /// This method is intended to be called from the `managedObjectContext` that is publishing the changes (The one linked to the `NSFetchedResultsController`
-    /// in this case).
-    /// Once the objects are mapped, those are sorted based on `sorting`
-    private func mapItems(completion: @escaping ([Item]) -> Void) {
-        let objects = frc.fetchedObjects ?? []
-
-        var items: [Item?] = []
-        items = objects.map { [weak self] in
-            guard self?.isDeletingDatabase == false else { return nil }
-            return try? self?.itemCreator($0)
-        }
-
-        let sorting = self.sorting
-        queue.async {
-            var result = items.compactMap { $0 }
-            if !sorting.isEmpty {
-                result = result.sort(using: sorting)
-            }
-            completion(result)
-        }
+    
+    /// Updates the locally cached items.
+    ///
+    /// - Important: Must be called from the managed object's perform closure.
+    @discardableResult private func updateItems(_ changes: [ListChange<Item>]?) -> [Item] {
+        let items = DatabaseItemConverter.convert(
+            dtos: frc.fetchedObjects ?? [],
+            existing: _items ?? [],
+            changes: changes,
+            itemCreator: itemCreator,
+            itemReuseKeyPaths: itemReuseKeyPaths,
+            sorting: sorting
+        )
+        _items = items
+        return items
     }
 }

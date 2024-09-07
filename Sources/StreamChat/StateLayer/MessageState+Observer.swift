@@ -4,7 +4,6 @@
 
 import Foundation
 
-@available(iOS 13.0, *)
 extension MessageState {
     struct Observer {
         private let messageId: MessageId
@@ -20,20 +19,21 @@ extension MessageState {
         ) {
             self.messageId = messageId
             messageObserver = StateLayerDatabaseObserver(
-                databaseContainer: database,
+                database: database,
                 fetchRequest: MessageDTO.message(withID: messageId),
                 itemCreator: { try $0.asModel() }
             )
             reactionsObserver = StateLayerDatabaseObserver(
-                databaseContainer: database,
+                database: database,
                 fetchRequest: MessageReactionDTO.reactionsFetchRequest(
                     for: messageId,
                     sort: ChatMessageReaction.defaultSortingDescriptors()
                 ),
-                itemCreator: { try $0.asModel() }
+                itemCreator: { try $0.asModel() },
+                itemReuseKeyPaths: (\ChatMessageReaction.id, \MessageReactionDTO.id)
             )
             repliesObserver = StateLayerDatabaseObserver(
-                databaseContainer: database,
+                database: database,
                 fetchRequest: MessageDTO.repliesFetchRequest(
                     for: messageId,
                     pageSize: .messagesPageSize,
@@ -41,7 +41,8 @@ extension MessageState {
                     deletedMessagesVisibility: clientConfig.deletedMessagesVisibility,
                     shouldShowShadowedMessages: clientConfig.shouldShowShadowedMessages
                 ),
-                itemCreator: { try $0.asModel() }
+                itemCreator: { try $0.asModel() },
+                itemReuseKeyPaths: (\ChatMessage.id, \MessageDTO.id)
             )
         }
         
@@ -59,7 +60,7 @@ extension MessageState {
             replies: StreamCollection<ChatMessage>
         ) {
             do {
-                let message = try messageObserver.startObserving(onContextDidChange: { message in
+                let message = try messageObserver.startObserving(onContextDidChange: { message, _ in
                     guard let message else { return }
                     Task.mainActor { await handlers.messageDidChange(message) }
                 })
@@ -74,7 +75,6 @@ extension MessageState {
     }
 }
 
-@available(iOS 13.0, *)
 extension ChatMessageReaction {
     static func defaultSorting(_ first: ChatMessageReaction, _ second: ChatMessageReaction) -> Bool {
         first.updatedAt > second.updatedAt

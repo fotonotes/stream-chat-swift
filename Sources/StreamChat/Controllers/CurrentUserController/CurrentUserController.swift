@@ -27,7 +27,6 @@ public class CurrentChatUserController: DataController, DelegateCallable, DataSt
     /// An internal backing object for all publicly available Combine publishers. We use it to simplify the way we expose
     /// publishers. Instead of creating custom `Publisher` types, we use `CurrentValueSubject` and `PassthroughSubject` internally,
     /// and expose the published values by mapping them to a read-only `AnyPublisher` type.
-    @available(iOS 13, *)
     var basePublishers: BasePublishers {
         if let value = _basePublishers as? BasePublishers {
             return value
@@ -156,16 +155,20 @@ public extension CurrentChatUserController {
     ///
     /// By default all data is `nil`, and it won't be updated unless a value is provided.
     ///
+    /// - Note: This operation does a partial user update which keeps existing data if not modified.
+    ///
     /// - Parameters:
     ///   - name: Optionally provide a new name to be updated.
     ///   - imageURL: Optionally provide a new image to be updated.
     ///   - privacySettings: The privacy settings of the user. Example: If the user does not want to expose typing events or read events.
+    ///   - role: The role for the user.
     ///   - userExtraData: Optionally provide new user extra data to be updated.
     ///   - completion: Called when user is successfuly updated, or with error.
     func updateUserData(
         name: String? = nil,
         imageURL: URL? = nil,
         privacySettings: UserPrivacySettings? = nil,
+        role: UserRole? = nil,
         userExtraData: [String: RawJSON] = [:],
         completion: ((Error?) -> Void)? = nil
     ) {
@@ -179,6 +182,7 @@ public extension CurrentChatUserController {
             name: name,
             imageURL: imageURL,
             privacySettings: privacySettings,
+            role: role,
             userExtraData: userExtraData
         ) { error in
             self.callback {
@@ -252,6 +256,32 @@ public extension CurrentChatUserController {
             }
         }
     }
+
+    /// Fetches all the unread information from the current user.
+    ///
+    ///  - Parameter completion: Called when the API call is finished.
+    ///  Returns the current user unreads or an error if the API call fails.
+    ///
+    /// Note: This is a one-time request, it is not observable.
+    func loadAllUnreads(completion: @escaping ((Result<CurrentUserUnreads, Error>) -> Void)) {
+        currentUserUpdater.loadAllUnreads { result in
+            self.callback {
+                completion(result)
+            }
+        }
+    }
+
+    /// Get all blocked users.
+    ///
+    /// - Parameter completion: Called when the API call is finished. Called with `Error` if the remote update fails.
+    ///
+    func loadBlockedUsers(completion: @escaping (Result<[BlockedUserDetails], Error>) -> Void) {
+        currentUserUpdater.loadBlockedUsers { result in
+            self.callback {
+                completion(result)
+            }
+        }
+    }
 }
 
 // MARK: - Environment
@@ -259,11 +289,11 @@ public extension CurrentChatUserController {
 extension CurrentChatUserController {
     struct Environment {
         var currentUserObserverBuilder: (
-            _ context: NSManagedObjectContext,
+            _ database: DatabaseContainer,
             _ fetchRequest: NSFetchRequest<CurrentUserDTO>,
             _ itemCreator: @escaping (CurrentUserDTO) throws -> CurrentChatUser,
             _ fetchedResultsControllerType: NSFetchedResultsController<CurrentUserDTO>.Type
-        ) -> EntityDatabaseObserver<CurrentChatUser, CurrentUserDTO> = EntityDatabaseObserver.init
+        ) -> BackgroundEntityDatabaseObserver<CurrentChatUser, CurrentUserDTO> = BackgroundEntityDatabaseObserver.init
 
         var currentUserUpdaterBuilder = CurrentUserUpdater.init
     }
@@ -285,9 +315,9 @@ private extension EntityChange where Item == UnreadCount {
 }
 
 private extension CurrentChatUserController {
-    func createUserObserver() -> EntityDatabaseObserver<CurrentChatUser, CurrentUserDTO> {
+    func createUserObserver() -> BackgroundEntityDatabaseObserver<CurrentChatUser, CurrentUserDTO> {
         environment.currentUserObserverBuilder(
-            client.databaseContainer.viewContext,
+            client.databaseContainer,
             CurrentUserDTO.defaultFetchRequest,
             { try $0.asModel() },
             NSFetchedResultsController<CurrentUserDTO>.self

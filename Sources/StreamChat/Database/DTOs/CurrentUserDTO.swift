@@ -9,11 +9,13 @@ import Foundation
 class CurrentUserDTO: NSManagedObject {
     @NSManaged var unreadChannelsCount: Int64
     @NSManaged var unreadMessagesCount: Int64
+    @NSManaged var unreadThreadsCount: Int64
 
     /// Contains the timestamp when last sync process was finished.
     /// The date later serves as reference date for the last event synced using `/sync` endpoint
     @NSManaged var lastSynchedEventDate: DBDate?
-
+    
+    @NSManaged var blockedUserIds: Set<String>
     @NSManaged var flaggedUsers: Set<UserDTO>
     @NSManaged var flaggedMessages: Set<MessageDTO>
     @NSManaged var mutedUsers: Set<UserDTO>
@@ -90,6 +92,8 @@ extension NSManagedObjectContext: CurrentUserDatabaseSession {
 
         let mutedUsers = try payload.mutedUsers.map { try saveUser(payload: $0.mutedUser) }
         dto.mutedUsers = Set(mutedUsers)
+        
+        dto.blockedUserIds = payload.blockedUserIds
 
         let channelMutes = Set(
             try payload.mutedChannels.map { try saveChannelMute(payload: $0) }
@@ -106,15 +110,22 @@ extension NSManagedObjectContext: CurrentUserDatabaseSession {
         return dto
     }
 
-    func saveCurrentUserUnreadCount(count: UnreadCount) throws {
+    func saveCurrentUserUnreadCount(count: UnreadCountPayload) throws {
         invalidateCurrentUserCache()
 
         guard let dto = currentUser else {
             throw ClientError.CurrentUserDoesNotExist()
         }
 
-        dto.unreadChannelsCount = Int64(clamping: count.channels)
-        dto.unreadMessagesCount = Int64(clamping: count.messages)
+        if let unreadChannels = count.channels {
+            dto.unreadChannelsCount = Int64(clamping: unreadChannels)
+        }
+        if let unreadMessages = count.messages {
+            dto.unreadMessagesCount = Int64(clamping: unreadMessages)
+        }
+        if let threadsCount = count.threads {
+            dto.unreadThreadsCount = Int64(clamping: threadsCount)
+        }
     }
 
     func saveCurrentUserDevices(_ devices: [DevicePayload], clearExisting: Bool) throws -> [DeviceDTO] {
@@ -190,27 +201,25 @@ extension CurrentUserDTO {
 
 extension CurrentChatUser {
     fileprivate static func create(fromDTO dto: CurrentUserDTO) throws -> CurrentChatUser {
-        guard let context = dto.managedObjectContext else { throw InvalidModel(dto) }
         let user = dto.user
 
-        let extraData: [String: RawJSON]
-        do {
-            extraData = try JSONDecoder.default.decode([String: RawJSON].self, from: dto.user.extraData)
-        } catch {
-            log.error(
-                "Failed to decode extra data for user with id: <\(dto.user.id)>, using default value instead. "
-                    + "Error: \(error)"
-            )
-            extraData = [:]
+        var extraData = [String: RawJSON]()
+        if !dto.user.extraData.isEmpty {
+            do {
+                extraData = try JSONDecoder.default.decode([String: RawJSON].self, from: dto.user.extraData)
+            } catch {
+                log.error(
+                    "Failed to decode extra data for user with id: <\(dto.user.id)>, using default value instead. "
+                        + "Error: \(error)"
+                )
+            }
         }
-
+        
         let mutedUsers: [ChatUser] = try dto.mutedUsers.map { try $0.asModel() }
         let flaggedUsers: [ChatUser] = try dto.flaggedUsers.map { try $0.asModel() }
         let flaggedMessagesIDs: [MessageId] = dto.flaggedMessages.map(\.id)
 
-        let fetchMutedChannels: () -> Set<ChatChannel> = {
-            Set(dto.channelMutes.compactMap { try? $0.channel.asModel() })
-        }
+        let mutedChannels = Set(dto.channelMutes.compactMap { try? $0.channel.asModel() })
 
         let language: TranslationLanguage? = dto.user.language.map(TranslationLanguage.init)
 
@@ -231,19 +240,20 @@ extension CurrentChatUser {
             extraData: extraData,
             devices: dto.devices.map { try $0.asModel() },
             currentDevice: dto.currentDevice?.asModel(),
+            blockedUserIds: dto.blockedUserIds,
             mutedUsers: Set(mutedUsers),
             flaggedUsers: Set(flaggedUsers),
             flaggedMessageIDs: Set(flaggedMessagesIDs),
             unreadCount: UnreadCount(
                 channels: Int(dto.unreadChannelsCount),
-                messages: Int(dto.unreadMessagesCount)
+                messages: Int(dto.unreadMessagesCount),
+                threads: Int(dto.unreadThreadsCount)
             ),
-            mutedChannels: fetchMutedChannels,
+            mutedChannels: mutedChannels,
             privacySettings: .init(
                 typingIndicators: .init(enabled: dto.isTypingIndicatorsEnabled),
                 readReceipts: .init(enabled: dto.isReadReceiptsEnabled)
-            ),
-            underlyingContext: context
+            )
         )
     }
 }

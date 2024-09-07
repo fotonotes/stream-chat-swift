@@ -34,7 +34,7 @@ extension Endpoint {
     static func partialThreadUpdate(
         messageId: MessageId,
         request: ThreadPartialUpdateRequest
-    ) -> Endpoint<ThreadPayloadResponse> {
+    ) -> Endpoint<ThreadPartialUpdateResponse> {
         .init(
             path: .thread(messageId: messageId),
             method: .patch,
@@ -43,20 +43,69 @@ extension Endpoint {
             body: request
         )
     }
+
+    // MARK: - Thread read
+
+    static func markThreadRead(cid: ChannelId, threadId: MessageId) -> Endpoint<EmptyResponse> {
+        .init(
+            path: .markThreadRead(cid: cid),
+            method: .post,
+            queryItems: nil,
+            requiresConnectionId: false,
+            body: [
+                "thread_id": threadId
+            ]
+        )
+    }
+
+    // MARK: - Thread unread
+
+    static func markThreadUnread(cid: ChannelId, threadId: MessageId) -> Endpoint<EmptyResponse> {
+        .init(
+            path: .markThreadUnread(cid: cid),
+            method: .post,
+            queryItems: nil,
+            requiresConnectionId: false,
+            body: [
+                "thread_id": threadId
+            ]
+        )
+    }
 }
 
 // MARK: - Helper data structures
 
 struct ThreadPayloadResponse: Decodable {
-    var thread: ThreadPayload
+    let thread: ThreadPayload
+}
+
+struct ThreadPartialUpdateResponse: Decodable {
+    let thread: ThreadPartialPayload
 }
 
 struct ThreadPartialUpdateRequest: Encodable {
-    var set: SetProperties?
-    var unset: [String]?
+    let set: SetProperties?
+    let unset: [String]?
+
+    init(set: SetProperties?, unset: [String]? = nil) {
+        self.set = set
+        self.unset = unset
+    }
 
     /// The available thread properties that can be updated.
     struct SetProperties: Encodable {
         var title: String?
+        var extraData: [String: RawJSON]?
+
+        enum CodingKeys: CodingKey {
+            case title
+            case extraData
+        }
+
+        func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encodeIfPresent(title, forKey: .title)
+            try extraData?.encode(to: encoder)
+        }
     }
 }

@@ -6,7 +6,7 @@ import CoreData
 import Foundation
 
 /// `ChatThreadListController` uses this protocol to communicate changes to its delegate.
-internal protocol ChatThreadListControllerDelegate: DataControllerStateDelegate {
+public protocol ChatThreadListControllerDelegate: DataControllerStateDelegate {
     /// The controller changed the list of observed threads.
     ///
     /// - Parameters:
@@ -20,12 +20,12 @@ internal protocol ChatThreadListControllerDelegate: DataControllerStateDelegate 
 
 /// `ChatThreadListController` is a controller class which allows querying and
 /// observing the threads that the current user is participating.
-internal class ChatThreadListController: DataController, DelegateCallable, DataStoreProvider {
+public class ChatThreadListController: DataController, DelegateCallable, DataStoreProvider {
     /// The query of the thread list.
-    internal let query: ThreadListQuery
+    public let query: ThreadListQuery
 
     /// The `ChatClient` instance this controller belongs to.
-    internal let client: ChatClient
+    public let client: ChatClient
 
     /// The cursor of the next page in case there is more data.
     private var nextCursor: String?
@@ -34,7 +34,7 @@ internal class ChatThreadListController: DataController, DelegateCallable, DataS
     ///
     /// To observe changes of the threads, set your class as a delegate of this controller
     /// or use the provided combine publishers.
-    internal var threads: LazyCachedMapCollection<ChatThread> {
+    public var threads: LazyCachedMapCollection<ChatThread> {
         startThreadListObserverIfNeeded()
         return threadListObserver.items
     }
@@ -47,7 +47,7 @@ internal class ChatThreadListController: DataController, DelegateCallable, DataS
         )
 
     /// A Boolean value that returns whether pagination is finished.
-    internal private(set) var hasLoadedAllOlderThreads: Bool = false
+    public private(set) var hasLoadedAllThreads: Bool = false
 
     /// A type-erased delegate.
     var multicastDelegate: MulticastDelegate<ChatThreadListControllerDelegate> = .init() {
@@ -60,10 +60,9 @@ internal class ChatThreadListController: DataController, DelegateCallable, DataS
         }
     }
 
-    private(set) lazy var threadListObserver: ListDatabaseObserverWrapper<ChatThread, ThreadDTO> = {
+    private(set) lazy var threadListObserver: BackgroundListDatabaseObserver<ChatThread, ThreadDTO> = {
         let request = ThreadDTO.threadListFetchRequest()
         let observer = self.environment.createThreadListDatabaseObserver(
-            StreamRuntimeCheck._isBackgroundMappingEnabled,
             client.databaseContainer,
             request,
             { try $0.asModel() }
@@ -85,7 +84,6 @@ internal class ChatThreadListController: DataController, DelegateCallable, DataS
     /// An internal backing object for all publicly available Combine publishers. We use it to simplify the way we expose
     /// publishers. Instead of creating custom `Publisher` types, we use `CurrentValueSubject` and `PassthroughSubject` internally,
     /// and expose the published values by mapping them to a read-only `AnyPublisher` type.
-    @available(iOS 13, *)
     var basePublishers: BasePublishers {
         if let value = _basePublishers as? BasePublishers {
             return value
@@ -107,23 +105,18 @@ internal class ChatThreadListController: DataController, DelegateCallable, DataS
         self.environment = environment
     }
 
-    override internal func synchronize(_ completion: ((_ error: Error?) -> Void)? = nil) {
+    override public func synchronize(_ completion: ((_ error: Error?) -> Void)? = nil) {
         startThreadListObserverIfNeeded()
-
-        let limit = query.limit
         threadsRepository.loadThreads(
             query: query
         ) { [weak self] result in
             switch result {
             case let .success(threadListResponse):
-                self?.threadListObserver.refreshItems { [weak self] in
-                    self?.callback {
-                        let threads = threadListResponse.threads
-                        self?.nextCursor = threadListResponse.next
-                        self?.state = .remoteDataFetched
-                        self?.hasLoadedAllOlderThreads = threads.count < limit
-                        completion?(nil)
-                    }
+                self?.callback {
+                    self?.state = .remoteDataFetched
+                    self?.nextCursor = threadListResponse.next
+                    self?.hasLoadedAllThreads = threadListResponse.next == nil
+                    completion?(nil)
                 }
             case let .failure(error):
                 self?.state = .remoteDataFetchFailed(ClientError(with: error))
@@ -134,12 +127,12 @@ internal class ChatThreadListController: DataController, DelegateCallable, DataS
 
     // MARK: - Actions
 
-    /// Loads older threads.
+    /// Loads more threads.
     ///
     /// - Parameters:
     ///   - limit: The size of the new page of threads.
     ///   - completion: The completion.
-    internal func loadOlderThreads(
+    public func loadMoreThreads(
         limit: Int? = nil,
         completion: ((Result<[ChatThread], Error>) -> Void)? = nil
     ) {
@@ -153,7 +146,7 @@ internal class ChatThreadListController: DataController, DelegateCallable, DataS
                 self?.callback {
                     let threads = threadListResponse.threads
                     self?.nextCursor = threadListResponse.next
-                    self?.hasLoadedAllOlderThreads = threads.count < limit
+                    self?.hasLoadedAllThreads = threadListResponse.next == nil
                     completion?(.success(threads))
                 }
             case let .failure(error):
@@ -183,7 +176,7 @@ internal class ChatThreadListController: DataController, DelegateCallable, DataS
 
 extension ChatThreadListController {
     /// Set the delegate of `ThreadListController` to observe thread changes.
-    internal weak var delegate: ChatThreadListControllerDelegate? {
+    public weak var delegate: ChatThreadListControllerDelegate? {
         get { multicastDelegate.mainDelegate }
         set { multicastDelegate.set(mainDelegate: newValue) }
     }
@@ -197,14 +190,16 @@ extension ChatThreadListController {
         ) -> ThreadsRepository = ThreadsRepository.init
 
         var createThreadListDatabaseObserver: (
-            _ isBackground: Bool,
             _ database: DatabaseContainer,
             _ fetchRequest: NSFetchRequest<ThreadDTO>,
             _ itemCreator: @escaping (ThreadDTO) throws -> ChatThread
         )
-            -> ListDatabaseObserverWrapper<ChatThread, ThreadDTO> = {
-                ListDatabaseObserverWrapper(
-                    isBackground: $0, database: $1, fetchRequest: $2, itemCreator: $3
+            -> BackgroundListDatabaseObserver<ChatThread, ThreadDTO> = {
+                BackgroundListDatabaseObserver(
+                    database: $0,
+                    fetchRequest: $1,
+                    itemCreator: $2,
+                    itemReuseKeyPaths: (\ChatThread.reuseId, \ThreadDTO.reuseId)
                 )
             }
     }

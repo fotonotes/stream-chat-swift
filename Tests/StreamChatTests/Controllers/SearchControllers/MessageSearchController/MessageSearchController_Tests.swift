@@ -175,14 +175,15 @@ final class MessageSearchController_Tests: XCTestCase {
         // Check if delegate method is called
         AssertAsync.willBeEqual(delegate.didChangeMessages_changes, [.insert(message, index: [0, 0])])
 
-        if #available(iOS 13, *) {
-            XCTAssert(controller.basePublishers.controller === controller)
-        }
+        XCTAssert(controller.basePublishers.controller === controller)
     }
 
     /// This test simulates a bug where the `message` field was not updated if it wasn't
     /// touched before calling synchronize.
     func test_searchWithText_resultIsReported_evenAfterCallingSynchronize() throws {
+        let delegate = MessageSearchController_Delegate(expectedQueueId: controllerCallbackQueueID)
+        controller.delegate = delegate
+        
         // Make a search
         controller.search(text: "test")
 
@@ -192,6 +193,7 @@ final class MessageSearchController_Tests: XCTestCase {
 
         // Simulate network call response
         env.messageUpdater?.search_completion?(.success(.empty()))
+        try waitForMessages(count: 1)
 
         let message = try XCTUnwrap(client.databaseContainer.viewContext.message(id: messageId)?.asModel())
 
@@ -388,6 +390,9 @@ final class MessageSearchController_Tests: XCTestCase {
     /// This test simulates a bug where the `messages` field was not updated if it wasn't
     /// touched before calling synchronize.
     func test_searchWithQuery_resultIsReported_evenAfterCallingSynchronize() throws {
+        let delegate = MessageSearchController_Delegate(expectedQueueId: controllerCallbackQueueID)
+        controller.delegate = delegate
+        
         // Make a search
         controller.search(query: query)
 
@@ -397,6 +402,8 @@ final class MessageSearchController_Tests: XCTestCase {
 
         // Simulate network call response
         env.messageUpdater?.search_completion?(.success(.empty()))
+        
+        try waitForMessages(count: 1)
 
         let message = try XCTUnwrap(client.databaseContainer.viewContext.message(id: messageId)?.asModel())
         XCTAssertEqual(controller.messages, [message])
@@ -674,6 +681,17 @@ final class MessageSearchController_Tests: XCTestCase {
 
         AssertAsync.willBeEqual(controller.messages.count, 1)
         return message
+    }
+    
+    // MARK: -
+    
+    func waitForMessages(count: Int) throws {
+        let delegate = try XCTUnwrap(controller.delegate as? MessageSearchController_Delegate)
+        guard controller.messages.count != count else { return }
+        let expectation = XCTestExpectation(description: "Messages change")
+        delegate.didChangeMessagesExpectedCount = count
+        delegate.didChangeMessagesExpectation = expectation
+        wait(for: [expectation], timeout: defaultTimeout)
     }
 }
 

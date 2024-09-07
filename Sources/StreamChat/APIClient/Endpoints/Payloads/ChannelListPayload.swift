@@ -37,6 +37,8 @@ struct ChannelPayload {
     let membership: MemberPayload?
 
     let messages: [MessagePayload]
+    
+    let pendingMessages: [MessagePayload]?
 
     let pinnedMessages: [MessagePayload]
 
@@ -58,6 +60,7 @@ extension ChannelPayload: Decodable {
     enum CodingKeys: String, CodingKey {
         case channel
         case messages
+        case pendingMessages = "pending_messages"
         case pinnedMessages = "pinned_messages"
         case channelReads = "read"
         case members
@@ -77,6 +80,7 @@ extension ChannelPayload: Decodable {
             members: try container.decodeArrayIgnoringFailures([MemberPayload].self, forKey: .members),
             membership: try container.decodeIfPresent(MemberPayload.self, forKey: .membership),
             messages: try container.decodeArrayIgnoringFailures([MessagePayload].self, forKey: .messages),
+            pendingMessages: try container.decodeArrayIfPresentIgnoringFailures([MessagePayload.Boxed].self, forKey: .pendingMessages)?.map(\.message),
             pinnedMessages: try container.decodeArrayIgnoringFailures([MessagePayload].self, forKey: .pinnedMessages),
             channelReads: try container.decodeArrayIfPresentIgnoringFailures([ChannelReadPayload].self, forKey: .channelReads) ?? [],
             isHidden: try container.decodeIfPresent(Bool.self, forKey: .hidden)
@@ -116,6 +120,8 @@ struct ChannelDetailPayload {
     let ownCapabilities: [String]?
     /// Checks if the channel is frozen.
     let isFrozen: Bool
+    /// Checks if the channel is blocked.
+    let isBlocked: Bool?
 
     /// Checks if the channel is hidden.
     /// Backend only sends this field for `QueryChannel` and `QueryChannels` API calls,
@@ -168,6 +174,7 @@ extension ChannelDetailPayload: Decodable {
             config: try container.decode(ChannelConfig.self, forKey: .config),
             ownCapabilities: try container.decodeIfPresent([String].self, forKey: .ownCapabilities),
             isFrozen: try container.decode(Bool.self, forKey: .frozen),
+            isBlocked: try container.decodeIfPresent(Bool.self, forKey: .blocked),
             // For `hidden`, we don't fallback to `false`
             // since this field is not sent for all API calls and for events
             // We can't assume anything regarding this flag when it's absent

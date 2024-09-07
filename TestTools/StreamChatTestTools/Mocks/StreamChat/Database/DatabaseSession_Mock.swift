@@ -7,6 +7,7 @@ import Foundation
 
 /// This class allows you to wrap an existing `DatabaseSession` and adjust the behavior of its methods.
 class DatabaseSession_Mock: DatabaseSession {
+    
     /// The wrapped session
     let underlyingSession: DatabaseSession
 
@@ -110,7 +111,7 @@ class DatabaseSession_Mock: DatabaseSession {
         return try saveCurrentUser(payload: payload)
     }
 
-    func saveCurrentUserUnreadCount(count: UnreadCount) throws {
+    func saveCurrentUserUnreadCount(count: UnreadCountPayload) throws {
         try throwErrorIfNeeded()
         try saveCurrentUserUnreadCount(count: count)
     }
@@ -137,6 +138,7 @@ class DatabaseSession_Mock: DatabaseSession {
         createdAt: Date?,
         skipPush: Bool,
         skipEnrichUrl: Bool,
+        poll: PollPayload?,
         extraData: [String: RawJSON]
     ) throws -> MessageDTO {
         try throwErrorIfNeeded()
@@ -156,7 +158,8 @@ class DatabaseSession_Mock: DatabaseSession {
             quotedMessageId: quotedMessageId,
             createdAt: createdAt,
             skipPush: skipPush,
-            skipEnrichUrl: skipEnrichUrl,
+            skipEnrichUrl: skipEnrichUrl, 
+            poll: poll,
             extraData: extraData
         )
     }
@@ -211,6 +214,14 @@ class DatabaseSession_Mock: DatabaseSession {
 
     func rescueMessagesStuckInSending() {
         underlyingSession.rescueMessagesStuckInSending()
+    }
+    
+    func loadMessages(from fromIncludingDate: Date, to toIncludingDate: Date, in cid: ChannelId, sortAscending: Bool) throws -> [MessageDTO] {
+        try underlyingSession.loadMessages(from: fromIncludingDate, to: toIncludingDate, in: cid, sortAscending: sortAscending)
+    }
+    
+    func loadReplies(from fromIncludingDate: Date, to toIncludingDate: Date, in messageId: MessageId, sortAscending: Bool) throws -> [MessageDTO] {
+        try underlyingSession.loadReplies(from: fromIncludingDate, to: toIncludingDate, in: messageId, sortAscending: sortAscending)
     }
 
     func reaction(messageId: MessageId, userId: UserId, type: MessageReactionType) -> MessageReactionDTO? {
@@ -357,6 +368,10 @@ class DatabaseSession_Mock: DatabaseSession {
     func saveQuery(query: MessageSearchQuery) -> MessageSearchQueryDTO {
         underlyingSession.saveQuery(query: query)
     }
+    
+    func allQueuedRequests() -> [QueuedRequestDTO] {
+        underlyingSession.allQueuedRequests()
+    }
 
     func deleteQueuedRequest(id: String) {
         underlyingSession.deleteQueuedRequest(id: id)
@@ -385,12 +400,120 @@ class DatabaseSession_Mock: DatabaseSession {
         try underlyingSession.saveThread(payload: payload, cache: cache)
     }
 
+    func saveThread(detailsPayload: ThreadDetailsPayload) throws -> ThreadDTO {
+        try underlyingSession.saveThread(detailsPayload: detailsPayload)
+    }
+
+    func saveThread(partialPayload: ThreadPartialPayload) throws -> ThreadDTO {
+        try underlyingSession.saveThread(partialPayload: partialPayload)
+    }
+
     func saveThreadRead(payload: ThreadReadPayload, parentMessageId: String, cache: PreWarmedCache?) throws -> ThreadReadDTO {
         try underlyingSession.saveThreadRead(payload: payload, parentMessageId: parentMessageId, cache: cache)
     }
-
+    
     func deleteAllThreads() throws {
         try underlyingSession.deleteAllThreads()
+    }
+
+    func delete(thread: ThreadDTO) {
+        underlyingSession.delete(thread: thread)
+    }
+
+    func loadThreadRead(parentMessageId: MessageId, userId: String) -> StreamChat.ThreadReadDTO? {
+        underlyingSession.loadThreadRead(parentMessageId: parentMessageId, userId: userId)
+    }
+
+    func loadThreadReads(for userId: UserId) -> [ThreadReadDTO] {
+        underlyingSession.loadThreadReads(for: userId)
+    }
+
+    func incrementThreadUnreadCount(parentMessageId: MessageId, for userId: String) -> ThreadReadDTO? {
+        underlyingSession.incrementThreadUnreadCount(parentMessageId: parentMessageId, for: userId)
+    }
+
+    var markThreadAsReadCallCount = 0
+    var markThreadAsReadCalledWith: (MessageId, UserId, Date)?
+
+    func markThreadAsRead(parentMessageId: MessageId, userId: UserId, at readAt: Date) {
+        markThreadAsReadCallCount += 1
+        markThreadAsReadCalledWith = (parentMessageId, userId, readAt)
+        underlyingSession.markThreadAsRead(parentMessageId: parentMessageId, userId: userId, at: readAt)
+    }
+
+    var markThreadAsUnreadCallCount = 0
+    var markThreadAsUnreadCalledWith: (MessageId, UserId)?
+
+    func markThreadAsUnread(for parentMessageId: MessageId, userId: UserId) {
+        markThreadAsUnreadCallCount += 1
+        markThreadAsUnreadCalledWith = (parentMessageId, userId)
+        underlyingSession.markThreadAsUnread(for: parentMessageId, userId: userId)
+    }
+    
+    func savePoll(payload: PollPayload, cache: PreWarmedCache?) throws -> PollDTO {
+        try underlyingSession.savePoll(payload: payload, cache: cache)
+    }
+    
+    func savePollVotes(
+        payload: PollVoteListResponse,
+        query: PollVoteListQuery?,
+        cache: PreWarmedCache?
+    ) throws -> [PollVoteDTO] {
+        try underlyingSession.savePollVotes(payload: payload, query: query, cache: cache)
+    }
+    
+    func savePollVote(
+        payload: PollVotePayload,
+        query: PollVoteListQuery?,
+        cache: PreWarmedCache?
+    ) throws -> PollVoteDTO {
+        try underlyingSession.savePollVote(payload: payload, query: query, cache: cache)
+    }
+    
+    func savePollVote(
+        voteId: String?,
+        pollId: String,
+        optionId: String?,
+        answerText: String?,
+        userId: String?,
+        query: PollVoteListQuery?
+    ) throws -> PollVoteDTO {
+        try underlyingSession.savePollVote(
+            voteId: voteId,
+            pollId: pollId,
+            optionId: optionId,
+            answerText: answerText,
+            userId: userId,
+            query: query
+        )
+    }
+    
+    func poll(id: String) throws -> PollDTO? {
+        try underlyingSession.poll(id: id)
+    }
+    
+    func option(id: String, pollId: String) throws -> PollOptionDTO? {
+        try underlyingSession.option(id: id, pollId: pollId)
+    }
+    
+    func pollVote(id: String, pollId: String) throws -> PollVoteDTO? {
+        try underlyingSession.pollVote(id: id, pollId: pollId)
+    }
+    
+    func pollVotes(for userId: String, pollId: String) throws -> [PollVoteDTO] {
+        try underlyingSession.pollVotes(for: userId, pollId: pollId)
+    }
+    
+    func removePollVote(with id: String, pollId: String) throws -> PollVoteDTO? {
+        try underlyingSession.removePollVote(with: id, pollId: pollId)
+    }
+    
+    func linkVote(with id: String, in pollId: String, to filterHash: String?) throws {
+        try underlyingSession.linkVote(with: id, in: pollId, to: filterHash)
+    }
+    
+    func delete(pollVote: PollVoteDTO) {
+        underlyingSession.delete(pollVote: pollVote)
     }
 }
 

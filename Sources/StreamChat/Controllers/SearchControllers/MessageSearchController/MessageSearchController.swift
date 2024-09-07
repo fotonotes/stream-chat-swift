@@ -73,7 +73,7 @@ public class ChatMessageSearchController: DataController, DelegateCallable, Data
         )
 
     /// Used for observing the database for changes.
-    private var messagesObserver: ListDatabaseObserverWrapper<ChatMessage, MessageDTO>?
+    private var messagesObserver: BackgroundListDatabaseObserver<ChatMessage, MessageDTO>?
 
     private func startObserversIfNeeded() {
         guard state == .initialized else { return }
@@ -88,13 +88,13 @@ public class ChatMessageSearchController: DataController, DelegateCallable, Data
     }
 
     private func setMessagesObserver() {
-        let observer = ListDatabaseObserverWrapper(
-            isBackground: StreamRuntimeCheck._isBackgroundMappingEnabled,
+        let observer = BackgroundListDatabaseObserver(
             database: client.databaseContainer,
             fetchRequest: MessageDTO.messagesFetchRequest(
                 for: lastQuery ?? query
             ),
-            itemCreator: { try $0.asModel() as ChatMessage }
+            itemCreator: { try $0.asModel() as ChatMessage },
+            itemReuseKeyPaths: (\ChatMessage.id, \MessageDTO.id)
         )
         observer.onDidChange = { [weak self] changes in
             self?.delegateCallback { [weak self] in
@@ -113,7 +113,6 @@ public class ChatMessageSearchController: DataController, DelegateCallable, Data
     /// An internal backing object for all publicly available Combine publishers. We use it to simplify the way we expose
     /// publishers. Instead of creating custom `Publisher` types, we use `CurrentValueSubject` and `PassthroughSubject` internally,
     /// and expose the published values by mapping them to a read-only `AnyPublisher` type.
-    @available(iOS 13, *)
     var basePublishers: BasePublishers {
         if let value = _basePublishers as? BasePublishers {
             return value
@@ -205,9 +204,9 @@ public class ChatMessageSearchController: DataController, DelegateCallable, Data
             }
 
             let error = result.error
-            self.callback { completion?(error) }
-            self.messagesObserver?.refreshItems { [weak self] in
-                self?.state = error == nil ? .remoteDataFetched : .remoteDataFetchFailed(ClientError(with: error))
+            self.state = error == nil ? .remoteDataFetched : .remoteDataFetchFailed(ClientError(with: error))
+            self.callback {
+                completion?(error)
             }
         }
     }

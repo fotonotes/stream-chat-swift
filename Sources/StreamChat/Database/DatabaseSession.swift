@@ -40,7 +40,7 @@ protocol CurrentUserDatabaseSession {
 
     /// Updates the `CurrentUserDTO` with the provided unread.
     /// If there is no current user, the error will be thrown.
-    func saveCurrentUserUnreadCount(count: UnreadCount) throws
+    func saveCurrentUserUnreadCount(count: UnreadCountPayload) throws
 
     /// Updates the `CurrentUserDTO.devices` with the provided `DevicesPayload`
     /// If there's no current user set, an error will be thrown.
@@ -83,6 +83,7 @@ protocol MessageDatabaseSession {
         createdAt: Date?,
         skipPush: Bool,
         skipEnrichUrl: Bool,
+        poll: PollPayload?,
         extraData: [String: RawJSON]
     ) throws -> MessageDTO
 
@@ -193,6 +194,20 @@ protocol MessageDatabaseSession {
     /// to avoid those from being stuck there in limbo.
     /// Messages can get stuck in `.sending` state if the network request to send them takes to much, and the app is backgrounded or killed.
     func rescueMessagesStuckInSending()
+    
+    func loadMessages(
+        from fromIncludingDate: Date,
+        to toIncludingDate: Date,
+        in cid: ChannelId,
+        sortAscending: Bool
+    ) throws -> [MessageDTO]
+    
+    func loadReplies(
+        from fromIncludingDate: Date,
+        to toIncludingDate: Date,
+        in messageId: MessageId,
+        sortAscending: Bool
+    ) throws -> [MessageDTO]
 }
 
 extension MessageDatabaseSession {
@@ -209,6 +224,7 @@ extension MessageDatabaseSession {
         skipEnrichUrl: Bool,
         attachments: [AnyAttachmentPayload] = [],
         mentionedUserIds: [UserId] = [],
+        pollPayload: PollPayload? = nil,
         extraData: [String: RawJSON] = [:]
     ) throws -> MessageDTO {
         try createNewMessage(
@@ -227,6 +243,7 @@ extension MessageDatabaseSession {
             createdAt: nil,
             skipPush: skipPush,
             skipEnrichUrl: skipEnrichUrl,
+            poll: pollPayload,
             extraData: extraData
         )
     }
@@ -390,6 +407,7 @@ protocol AttachmentDatabaseSession {
 }
 
 protocol QueuedRequestDatabaseSession {
+    func allQueuedRequests() -> [QueuedRequestDTO]
     func deleteQueuedRequest(id: String)
 }
 
@@ -411,6 +429,14 @@ protocol ThreadDatabaseSession {
         cache: PreWarmedCache?
     ) throws -> ThreadDTO
 
+    /// Updates the thread with details from a thread event.
+    @discardableResult
+    func saveThread(detailsPayload: ThreadDetailsPayload) throws -> ThreadDTO
+
+    /// Updates the thread with partial thread information.
+    @discardableResult
+    func saveThread(partialPayload: ThreadPartialPayload) throws -> ThreadDTO
+
     /// Creates a new `ThreadParticipantDTO` object in the database with the given `payload`.
     @discardableResult
     func saveThreadParticipant(
@@ -419,6 +445,14 @@ protocol ThreadDatabaseSession {
         cache: PreWarmedCache?
     ) throws -> ThreadParticipantDTO
 
+    /// Cleans all the threads in the database.
+    func deleteAllThreads() throws
+
+    /// Deletes a thread.
+    func delete(thread: ThreadDTO)
+}
+
+protocol ThreadReadDatabaseSession {
     /// Creates a new `ThreadReadDTO` object in the database with the given `payload`.
     @discardableResult
     func saveThreadRead(
@@ -427,8 +461,132 @@ protocol ThreadDatabaseSession {
         cache: PreWarmedCache?
     ) throws -> ThreadReadDTO
 
-    /// Cleans all the threads in the database.
-    func deleteAllThreads() throws
+    /// Fetches `ThreadReadDTO` with the given `parentMessageId` and `userId` from the DB.
+    func loadThreadRead(parentMessageId: MessageId, userId: String) -> ThreadReadDTO?
+
+    /// Fetches `ThreadReadDTO`entities for the given `userId` from the DB.
+    func loadThreadReads(for userId: UserId) -> [ThreadReadDTO]
+
+    /// Increments the thread unread count for the given user id.
+    @discardableResult
+    func incrementThreadUnreadCount(parentMessageId: MessageId, for userId: String) -> ThreadReadDTO?
+
+    /// Sets the thread with `parentMessageId` as read for `userId`
+    func markThreadAsRead(parentMessageId: MessageId, userId: UserId, at readAt: Date)
+
+    /// Marks the whole thread as unread.
+    func markThreadAsUnread(
+        for parentMessageId: MessageId,
+        userId: UserId
+    )
+}
+
+protocol PollDatabaseSession {
+    /// Saves a poll with the provided payload.
+    /// - Parameters:
+    ///   - payload: The `PollPayload` containing the details of the poll to be saved.
+    ///   - cache: An optional `PreWarmedCache` to optimize the save operation.
+    /// - Returns: A `PollDTO` representing the saved poll.
+    /// - Throws: An error if the save operation fails.
+    @discardableResult
+    func savePoll(payload: PollPayload, cache: PreWarmedCache?) throws -> PollDTO
+    
+    /// Saves a list of poll votes with the provided payload.
+    /// - Parameters:
+    ///   - payload: The `PollVoteListResponse` containing the details of the poll votes to be saved.
+    ///   - query: An optional `PollVoteListQuery` to specify the query parameters.
+    ///   - cache: An optional `PreWarmedCache` to optimize the save operation.
+    /// - Returns: An array of `PollVoteDTO` representing the saved poll votes.
+    /// - Throws: An error if the save operation fails.
+    @discardableResult
+    func savePollVotes(
+        payload: PollVoteListResponse,
+        query: PollVoteListQuery?,
+        cache: PreWarmedCache?
+    ) throws -> [PollVoteDTO]
+    
+    /// Saves a poll vote with the provided payload.
+    /// - Parameters:
+    ///   - payload: The `PollVotePayload` containing the details of the poll vote to be saved.
+    ///   - query: An optional `PollVoteListQuery` to specify the query parameters.
+    ///   - cache: An optional `PreWarmedCache` to optimize the save operation.
+    /// - Returns: A `PollVoteDTO` representing the saved poll vote.
+    /// - Throws: An error if the save operation fails.
+    @discardableResult
+    func savePollVote(
+        payload: PollVotePayload,
+        query: PollVoteListQuery?,
+        cache: PreWarmedCache?
+    ) throws -> PollVoteDTO
+    
+    /// Saves a poll vote with the specified parameters.
+    /// - Parameters:
+    ///   - pollId: The ID of the poll.
+    ///   - optionId: The ID of the poll option.
+    ///   - answerText: An optional text answer for the poll vote.
+    ///   - userId: An optional ID of the user.
+    ///   - query: An optional `PollVoteListQuery` to specify the query parameters.
+    /// - Returns: A `PollVoteDTO` representing the saved poll vote.
+    /// - Throws: An error if the save operation fails.
+    @discardableResult
+    func savePollVote(
+        voteId: String?,
+        pollId: String,
+        optionId: String?,
+        answerText: String?,
+        userId: String?,
+        query: PollVoteListQuery?
+    ) throws -> PollVoteDTO
+    
+    /// Retrieves a poll by its ID.
+    /// - Parameter id: The ID of the poll to retrieve.
+    /// - Returns: A `PollDTO` representing the poll, or `nil` if the poll is not found.
+    /// - Throws: An error if the retrieval operation fails.
+    func poll(id: String) throws -> PollDTO?
+    
+    /// Retrieves a poll option by its ID and poll ID.
+    /// - Parameters:
+    ///   - id: The ID of the poll option to retrieve.
+    ///   - pollId: The ID of the poll containing the option.
+    /// - Returns: A `PollOptionDTO` representing the poll option, or `nil` if the option is not found.
+    /// - Throws: An error if the retrieval operation fails.
+    func option(id: String, pollId: String) throws -> PollOptionDTO?
+    
+    /// Retrieves a poll vote by its ID and poll ID.
+    /// - Parameters:
+    ///   - id: The ID of the poll vote to retrieve.
+    ///   - pollId: The ID of the poll containing the vote.
+    /// - Returns: A `PollVoteDTO` representing the poll vote, or `nil` if the vote is not found.
+    /// - Throws: An error if the retrieval operation fails.
+    func pollVote(id: String, pollId: String) throws -> PollVoteDTO?
+    
+    /// Retrieves all poll votes for a specific user and poll.
+    /// - Parameters:
+    ///   - userId: The ID of the user whose votes are to be retrieved.
+    ///   - pollId: The ID of the poll containing the votes.
+    /// - Returns: An array of `PollVoteDTO` representing the user's poll votes.
+    /// - Throws: An error if the retrieval operation fails.
+    func pollVotes(for userId: String, pollId: String) throws -> [PollVoteDTO]
+    
+    /// Removes a poll vote by its ID and poll ID.
+    /// - Parameters:
+    ///   - id: The ID of the poll vote to remove.
+    ///   - pollId: The ID of the poll containing the vote.
+    /// - Returns: The deleted vote.
+    /// - Throws: An error if the removal operation fails.
+    func removePollVote(with id: String, pollId: String) throws -> PollVoteDTO?
+    
+    /// Links a vote with a specific filter hash within a poll.
+    /// - Parameters:
+    ///   - id: The ID of the vote to link.
+    ///   - pollId: The ID of the poll containing the vote.
+    ///   - filterHash: An optional filter hash to link the vote to.
+    /// - Throws: An error if the linking operation fails.
+    func linkVote(with id: String, in pollId: String, to filterHash: String?) throws
+    
+    /// Deletes a poll vote.
+    /// - Parameter pollVote: The `PollVoteDTO` representing the poll vote to delete.
+    func delete(pollVote: PollVoteDTO)
 }
 
 protocol DatabaseSession: UserDatabaseSession,
@@ -442,7 +600,9 @@ protocol DatabaseSession: UserDatabaseSession,
     AttachmentDatabaseSession,
     ChannelMuteDatabaseSession,
     QueuedRequestDatabaseSession,
-    ThreadDatabaseSession {}
+    ThreadDatabaseSession,
+    ThreadReadDatabaseSession,
+    PollDatabaseSession {}
 
 extension DatabaseSession {
     @discardableResult
@@ -471,8 +631,6 @@ extension DatabaseSession {
             try saveUser(payload: userPayload)
         }
 
-        // Member events are handled in `MemberEventMiddleware`
-
         // Save a channel detail data.
         if let channelDetailPayload = payload.channel {
             try saveChannel(payload: channelDetailPayload, query: nil, cache: nil)
@@ -484,6 +642,14 @@ extension DatabaseSession {
 
         if let unreadCount = payload.unreadCount {
             try saveCurrentUserUnreadCount(count: unreadCount)
+        }
+
+        if let threadDetailsPayload = payload.threadDetails?.value {
+            try saveThread(detailsPayload: threadDetailsPayload)
+        }
+
+        if let threadPartialPayload = payload.threadPartial?.value {
+            try saveThread(partialPayload: threadPartialPayload)
         }
 
         try saveMessageIfNeeded(from: payload)
@@ -515,6 +681,22 @@ extension DatabaseSession {
             } catch {
                 log.warning("Failed to update message reaction in the database, error: \(error)")
             }
+        }
+        
+        if let vote = payload.vote {
+            if payload.eventType == .pollVoteRemoved {
+                if let dto = try? pollVote(id: vote.id, pollId: vote.pollId) {
+                    delete(pollVote: dto)
+                }
+            } else if payload.eventType == .pollVoteChanged {
+                try handlePollVoteChangedEvent(vote: vote)
+            } else {
+                try handlePollVoteEvent(vote: vote, payload: payload)
+            }
+        }
+        
+        if let poll = payload.poll {
+            try savePoll(payload: poll, cache: nil)
         }
 
         updateChannelPreview(from: payload)
@@ -599,6 +781,70 @@ extension DatabaseSession {
 
         default:
             break
+        }
+    }
+    
+    func handlePollVoteChangedEvent(vote: PollVotePayload) throws {
+        var voteUpdated = false
+        let userId = vote.userId ?? "anon"
+        if let optionId = vote.optionId, !optionId.isEmpty {
+            let id = PollVoteDTO.localVoteId(
+                optionId: optionId,
+                pollId: vote.pollId,
+                userId: vote.userId
+            )
+            if let dto = try pollVote(id: id, pollId: vote.pollId) {
+                dto.id = vote.id
+                voteUpdated = true
+            }
+
+            let votes = try pollVotes(for: userId, pollId: vote.pollId)
+            for existing in votes {
+                if vote.id != existing.id && existing.isAnswer == false {
+                    delete(pollVote: existing)
+                }
+            }
+        } else if vote.isAnswer == true {
+            let votes = try pollVotes(for: userId, pollId: vote.pollId)
+            for existing in votes {
+                if vote.id != existing.id && existing.isAnswer == true {
+                    delete(pollVote: existing)
+                }
+            }
+        }
+
+        if !voteUpdated {
+            try savePollVote(payload: vote, query: nil, cache: nil)
+        }
+    }
+    
+    func handlePollVoteEvent(vote: PollVotePayload, payload: EventPayload) throws {
+        var voteUpdated = false
+        if payload.eventType == .pollVoteCasted {
+            if vote.isAnswer == true, let userId = vote.userId {
+                let votes = try pollVotes(for: userId, pollId: vote.pollId)
+                for existing in votes {
+                    if existing.optionId == nil || existing.optionId?.isEmpty == true {
+                        delete(pollVote: existing)
+                    }
+                }
+            } else {
+                if let optionId = vote.optionId, !optionId.isEmpty {
+                    let id = PollVoteDTO.localVoteId(
+                        optionId: optionId,
+                        pollId: vote.pollId,
+                        userId: vote.userId
+                    )
+                    if let dto = try pollVote(id: id, pollId: vote.pollId) {
+                        dto.id = vote.id
+                        voteUpdated = true
+                    }
+                }
+            }
+        }
+        
+        if !voteUpdated {
+            try savePollVote(payload: vote, query: nil, cache: nil)
         }
     }
 }

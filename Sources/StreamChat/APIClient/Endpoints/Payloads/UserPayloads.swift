@@ -19,6 +19,7 @@ enum UserPayloadsCodingKeys: String, CodingKey, CaseIterable {
     case teams
     case unreadChannelsCount = "unread_channels"
     case unreadMessagesCount = "total_unread_count"
+    case unreadThreads = "unread_threads"
     case mutedUsers = "mutes"
     case mutedChannels = "channel_mutes"
     case isAnonymous = "anon"
@@ -26,6 +27,7 @@ enum UserPayloadsCodingKeys: String, CodingKey, CaseIterable {
     case unreadCount = "unread_count"
     case language
     case privacySettings = "privacy_settings"
+    case blockedUserIds = "blocked_user_ids"
 }
 
 // MARK: - GET users
@@ -164,17 +166,20 @@ struct UserUpdateRequestBody: Encodable {
     let name: String?
     let imageURL: URL?
     let privacySettings: UserPrivacySettingsPayload?
+    let role: UserRole?
     let extraData: [String: RawJSON]?
 
     init(
         name: String?,
         imageURL: URL?,
         privacySettings: UserPrivacySettingsPayload?,
+        role: UserRole?,
         extraData: [String: RawJSON]?
     ) {
         self.name = name
         self.imageURL = imageURL
         self.privacySettings = privacySettings
+        self.role = role
         self.extraData = extraData
     }
 
@@ -183,6 +188,63 @@ struct UserUpdateRequestBody: Encodable {
         try container.encodeIfPresent(name, forKey: .name)
         try container.encodeIfPresent(imageURL, forKey: .imageURL)
         try container.encodeIfPresent(privacySettings, forKey: .privacySettings)
+        try container.encodeIfPresent(role, forKey: .role)
         try extraData?.encode(to: encoder)
     }
+}
+
+// MARK: - Current User Unreads
+
+struct CurrentUserUnreadsPayload: Decodable {
+    enum CodingKeys: String, CodingKey {
+        case totalUnreadCount = "total_unread_count"
+        case totalUnreadThreadsCount = "total_unread_threads_count"
+        case channels
+        case channelType = "channel_type"
+        case threads
+    }
+
+    let totalUnreadCount: Int
+    let totalUnreadThreadsCount: Int
+    let channels: [CurrentUserChannelUnreadPayload]
+    let channelType: [ChannelUnreadByTypePayload]
+    let threads: [CurrentUserThreadUnreadPayload]
+}
+
+struct CurrentUserChannelUnreadPayload: Decodable {
+    enum CodingKeys: String, CodingKey {
+        case channelId = "channel_id"
+        case unreadCount = "unread_count"
+        case lastRead = "last_read"
+    }
+
+    let channelId: ChannelId
+    let unreadCount: Int
+    let lastRead: Date?
+}
+
+struct CurrentUserThreadUnreadPayload: Decodable {
+    enum CodingKeys: String, CodingKey {
+        case parentMessageId = "parent_message_id"
+        case lastRead = "last_read"
+        case lastReadMessageId = "last_read_message_id"
+        case unreadCount = "unread_count"
+    }
+
+    let parentMessageId: MessageId
+    let lastRead: Date?
+    let lastReadMessageId: MessageId?
+    let unreadCount: Int
+}
+
+struct ChannelUnreadByTypePayload: Decodable {
+    enum CodingKeys: String, CodingKey {
+        case channelType = "channel_type"
+        case channelCount = "channel_count"
+        case unreadCount = "unread_count"
+    }
+
+    let channelType: ChannelType
+    let channelCount: Int
+    let unreadCount: Int
 }

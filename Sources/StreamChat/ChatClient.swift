@@ -46,15 +46,14 @@ public class ChatClient {
     /// work if needed (i.e. when a new message pending sent appears in the database, a worker tries to send it.)
     private(set) var backgroundWorkers: [Worker] = []
 
-    /// Keeps a weak reference to the active channel list controllers to ensure a proper recovery when coming back online
-    private(set) var activeChannelListControllers = ThreadSafeWeakCollection<ChatChannelListController>()
-    private(set) var activeChannelControllers = ThreadSafeWeakCollection<ChatChannelController>()
-
     /// Background worker that takes care about client connection recovery when the Internet comes back OR app transitions from background to foreground.
     private(set) var connectionRecoveryHandler: ConnectionRecoveryHandler?
 
     /// The notification center used to send and receive notifications about incoming events.
     private(set) var eventNotificationCenter: EventNotificationCenter
+    
+    private var _sharedCurrentUserController: CurrentChatUserController?
+    private let queue = DispatchQueue(label: "io.getstream.chat-client")
 
     /// The registry that contains all the attachment payloads associated with their attachment types.
     /// For the meantime this is a static property to avoid breaking changes. On v5, this can be changed.
@@ -76,10 +75,10 @@ public class ChatClient {
 
     let syncRepository: SyncRepository
 
-    let callRepository: CallRepository
-
     let channelRepository: ChannelRepository
     
+    let pollsRepository: PollsRepository
+
     let channelListUpdater: ChannelListUpdater
 
     func makeMessagesPaginationStateHandler() -> MessagesPaginationStateHandling {
@@ -167,8 +166,6 @@ public class ChatClient {
         )
         let syncRepository = environment.syncRepositoryBuilder(
             config,
-            activeChannelControllers,
-            activeChannelListControllers,
             offlineRequestsRepository,
             eventNotificationCenter,
             databaseContainer,
@@ -206,11 +203,11 @@ public class ChatClient {
         self.syncRepository = syncRepository
         authenticationRepository = authRepository
         extensionLifecycle = environment.extensionLifecycleBuilder(config.applicationGroupIdentifier)
-        callRepository = environment.callRepositoryBuilder(apiClient)
         channelRepository = environment.channelRepositoryBuilder(
             databaseContainer,
             apiClient
         )
+        pollsRepository = environment.pollsRepositoryBuilder(databaseContainer, apiClient)
 
         authRepository.delegate = self
         apiClientEncoder.connectionDetailsProviderDelegate = self
@@ -254,7 +251,8 @@ public class ChatClient {
             extensionLifecycle,
             environment.backgroundTaskSchedulerBuilder(),
             environment.internetConnection(eventNotificationCenter, environment.internetMonitor),
-            config.staysConnectedInBackground
+            config.staysConnectedInBackground,
+            config.reconnectionTimeout.map { ScheduledStreamTimer(interval: $0, fireOnStart: false, repeats: false) }
         )
     }
 
@@ -285,6 +283,8 @@ public class ChatClient {
         tokenProvider: @escaping TokenProvider,
         completion: ((Error?) -> Void)? = nil
     ) {
+        connectionRecoveryHandler?.start()
+
         authenticationRepository.connectUser(
             userInfo: userInfo,
             tokenProvider: tokenProvider,
@@ -303,7 +303,6 @@ public class ChatClient {
     ///
     /// - Throws: An error while communicating with the Stream API.
     /// - Returns: A type representing the connected user and its state.
-    @available(iOS 13.0, *)
     @discardableResult public func connectUser(
         userInfo: UserInfo,
         tokenProvider: @escaping TokenProvider
@@ -356,7 +355,6 @@ public class ChatClient {
     ///
     /// - Throws: An error while communicating with the Stream API.
     /// - Returns: A type representing the connected user and its state.
-    @available(iOS 13.0, *)
     @discardableResult public func connectUser(
         userInfo: UserInfo,
         token: Token
@@ -378,6 +376,7 @@ public class ChatClient {
         userInfo: UserInfo,
         completion: ((Error?) -> Void)? = nil
     ) {
+        connectionRecoveryHandler?.start()
         authenticationRepository.connectGuestUser(userInfo: userInfo, completion: { completion?($0) })
     }
     
@@ -389,7 +388,6 @@ public class ChatClient {
     ///
     /// - Throws: An error while communicating with the Stream API.
     /// - Returns: A type representing the connected user and its state.
-    @available(iOS 13.0, *)
     @discardableResult public func connectGuestUser(userInfo: UserInfo) async throws -> ConnectedUser {
         try await withCheckedThrowingContinuation { continuation in
             connectGuestUser(userInfo: userInfo) { error in
@@ -402,6 +400,7 @@ public class ChatClient {
     /// Connects an anonymous user
     /// - Parameter completion: The completion that will be called once the **first** user session for the given token is setup.
     public func connectAnonymousUser(completion: ((Error?) -> Void)? = nil) {
+        connectionRecoveryHandler?.start()
         authenticationRepository.connectAnonymousUser(
             completion: { completion?($0) }
         )
@@ -411,7 +410,6 @@ public class ChatClient {
     ///
     /// - Throws: An error while communicating with the Stream API.
     /// - Returns: A type representing the connected user and its state.
-    @available(iOS 13.0, *)
     @discardableResult public func connectAnonymousUser() async throws -> ConnectedUser {
         try await withCheckedThrowingContinuation { continuation in
             connectAnonymousUser { error in
@@ -438,6 +436,7 @@ public class ChatClient {
     /// Disconnects the chat client from the chat servers. No further updates from the servers
     /// are received.
     public func disconnect(completion: @escaping () -> Void) {
+        connectionRecoveryHandler?.stop()
         connectionRepository.disconnect(source: .userInitiated) {
             log.info("The `ChatClient` has been disconnected.", subsystems: .webSocket)
             completion()
@@ -448,7 +447,6 @@ public class ChatClient {
 
     /// Disconnects the chat client from the chat servers. No further updates from the servers
     /// are received.
-    @available(iOS 13.0, *)
     public func disconnect() async {
         await withCheckedContinuation { continuation in
             disconnect {
@@ -466,10 +464,9 @@ public class ChatClient {
     /// Disconnects the chat client from the chat servers and removes all the local data related.
     public func logout(completion: @escaping () -> Void) {
         authenticationRepository.logOutUser()
+        resetSharedCurrentUserController()
 
         // Stop tracking active components
-        activeChannelControllers.removeAllObjects()
-        activeChannelListControllers.removeAllObjects()
         syncRepository.removeAllTracked()
 
         let group = DispatchGroup()
@@ -494,7 +491,6 @@ public class ChatClient {
     }
     
     /// Disconnects the chat client form the chat servers and removes all the local data related.
-    @available(iOS 13.0, *)
     public func logout() async {
         await withCheckedContinuation { continuation in
             logout {
@@ -526,7 +522,6 @@ public class ChatClient {
     ///   - handler: The handler closure which is called when the event happens.
     ///
     /// - Returns: A cancellable instance, which you use when you end the subscription. Deallocation of the result will tear down the subscription stream.
-    @available(iOS 13.0, *)
     public func subscribe<E>(toEvent event: E.Type, handler: @escaping (E) -> Void) -> AnyCancellable where E: Event {
         eventNotificationCenter.subscribe(to: E.self, handler: handler)
     }
@@ -538,7 +533,6 @@ public class ChatClient {
     /// - Parameter handler: The handler closure which is called when the event happens.
     ///
     /// - Returns: A cancellable instance, which you use when you end the subscription. Deallocation of the result will tear down the subscription stream.
-    @available(iOS 13.0, *)
     public func subscribe(_ handler: @escaping (Event) -> Void) -> AnyCancellable {
         eventNotificationCenter.subscribe(handler: handler)
     }
@@ -565,7 +559,6 @@ public class ChatClient {
     /// Fetches the app settings and updates the ``ChatClient/appSettings``.
     ///
     /// - Returns: The latest state of app settings.
-    @available(iOS 13.0, *)
     public func loadAppSettings() async throws -> AppSettings {
         try await withCheckedThrowingContinuation { continuation in
             loadAppSettings(completion: continuation.resume(with:))
@@ -594,29 +587,6 @@ public class ChatClient {
         ]
     }
 
-    func startTrackingChannelController(_ channelController: ChatChannelController) {
-        // If it is already tracking, do nothing.
-        guard !activeChannelControllers.contains(channelController) else {
-            return
-        }
-        activeChannelControllers.add(channelController)
-    }
-
-    func stopTrackingChannelController(_ channelController: ChatChannelController) {
-        activeChannelControllers.remove(channelController)
-    }
-
-    func startTrackingChannelListController(_ channelListController: ChatChannelListController) {
-        guard !activeChannelListControllers.contains(channelListController) else {
-            return
-        }
-        activeChannelListControllers.add(channelListController)
-    }
-
-    func stopTrackingChannelListController(_ channelListController: ChatChannelListController) {
-        activeChannelListControllers.remove(channelListController)
-    }
-
     func completeConnectionIdWaiters(connectionId: String?) {
         connectionRepository.completeConnectionIdWaiters(connectionId: connectionId)
     }
@@ -630,6 +600,24 @@ public class ChatClient {
     private func refreshToken(completion: ((Error?) -> Void)?) {
         authenticationRepository.refreshToken {
             completion?($0)
+        }
+    }
+    
+    /// A shared user controller for an easy access to the current user.
+    var sharedCurrentUserController: CurrentChatUserController {
+        queue.sync {
+            if let controller = _sharedCurrentUserController {
+                return controller
+            }
+            let controller = currentUserController()
+            _sharedCurrentUserController = controller
+            return controller
+        }
+    }
+    
+    func resetSharedCurrentUserController() {
+        queue.async {
+            self._sharedCurrentUserController = nil
         }
     }
 }
@@ -660,6 +648,7 @@ extension ChatClient: ConnectionStateDelegate {
             }
         )
         connectionRecoveryHandler?.webSocketClient(client, didUpdateConnectionState: state)
+        try? backgroundWorker(of: MessageSender.self).didUpdateConnectionState(state)
     }
 }
 
@@ -674,12 +663,27 @@ extension ChatClient: ConnectionDetailsProviderDelegate {
     }
 }
 
+extension ChatClient {
+    func backgroundWorker<T>(of type: T.Type) throws -> T {
+        if let worker = backgroundWorkers.compactMap({ $0 as? T }).first {
+            return worker
+        }
+        if currentUserId == nil {
+            throw ClientError.CurrentUserDoesNotExist()
+        }
+        if !config.isClientInActiveMode {
+            throw ClientError.ClientIsNotInActiveMode()
+        }
+        throw ClientError("Background worker of type \(T.self) is not set up")
+    }
+}
+
 extension ClientError {
-    public class MissingLocalStorageURL: ClientError {
+    public final class MissingLocalStorageURL: ClientError {
         override public var localizedDescription: String { "The URL provided in ChatClientConfig is `nil`." }
     }
 
-    public class ConnectionNotSuccessful: ClientError {
+    public final class ConnectionNotSuccessful: ClientError {
         override public var localizedDescription: String {
             """
             Connection to the API has failed.
@@ -691,10 +695,10 @@ extension ClientError {
         }
     }
 
-    public class MissingToken: ClientError {}
-    class WaiterTimeout: ClientError {}
+    public final class MissingToken: ClientError {}
+    final class WaiterTimeout: ClientError {}
 
-    public class ClientIsNotInActiveMode: ClientError {
+    public final class ClientIsNotInActiveMode: ClientError {
         override public var localizedDescription: String {
             """
                 ChatClient is in connectionless mode, it cannot connect to websocket.
@@ -703,7 +707,7 @@ extension ClientError {
         }
     }
 
-    public class ConnectionWasNotInitiated: ClientError {
+    public final class ConnectionWasNotInitiated: ClientError {
         override public var localizedDescription: String {
             """
                 Before performing any other actions on chat client it's required to connect by using \
@@ -712,13 +716,13 @@ extension ClientError {
         }
     }
 
-    public class ClientHasBeenDeallocated: ClientError {
+    public final class ClientHasBeenDeallocated: ClientError {
         override public var localizedDescription: String {
             "ChatClient has been deallocated, make sure to keep at least one strong reference to it."
         }
     }
 
-    public class MissingTokenProvider: ClientError {
+    public final class MissingTokenProvider: ClientError {
         override public var localizedDescription: String {
             """
                 Missing token refresh provider to get a new token

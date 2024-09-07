@@ -21,10 +21,12 @@ public extension CurrentChatUser {
         lastActiveAt: Date? = nil,
         teams: Set<TeamId> = [],
         language: TranslationLanguage? = nil,
+        blockedUserIds: Set<UserId> = [],
         extraData: [String: RawJSON] = [:],
         devices: [Device] = [],
         currentDevice: Device? = nil,
         mutedUsers: Set<ChatUser> = [],
+        blockedUsers: Set<BlockedUserDetails> = [],
         flaggedUsers: Set<ChatUser> = [],
         flaggedMessageIDs: Set<MessageId> = [],
         unreadCount: UnreadCount = .noUnread,
@@ -48,13 +50,13 @@ public extension CurrentChatUser {
             extraData: extraData,
             devices: devices,
             currentDevice: currentDevice,
+            blockedUserIds: blockedUserIds,
             mutedUsers: mutedUsers,
             flaggedUsers: flaggedUsers,
             flaggedMessageIDs: flaggedMessageIDs,
             unreadCount: unreadCount,
-            mutedChannels: { mutedChannels }, 
-            privacySettings: privacySettings,
-            underlyingContext: nil
+            mutedChannels: mutedChannels,
+            privacySettings: privacySettings
         )
     }
 }

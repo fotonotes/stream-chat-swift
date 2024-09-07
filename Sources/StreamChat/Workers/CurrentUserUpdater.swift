@@ -20,10 +20,11 @@ class CurrentUserUpdater: Worker {
     ///   - completion: Called when user is successfuly updated, or with error.
     func updateUserData(
         currentUserId: UserId,
-        name: String? = nil,
-        imageURL: URL? = nil,
-        privacySettings: UserPrivacySettings? = nil,
-        userExtraData: [String: RawJSON]? = nil,
+        name: String?,
+        imageURL: URL?,
+        privacySettings: UserPrivacySettings?,
+        role: UserRole?,
+        userExtraData: [String: RawJSON]?,
         completion: ((Error?) -> Void)? = nil
     ) {
         let params: [Any?] = [name, imageURL, userExtraData]
@@ -37,6 +38,7 @@ class CurrentUserUpdater: Worker {
             name: name,
             imageURL: imageURL,
             privacySettings: privacySettings.map { UserPrivacySettingsPayload(settings: $0) },
+            role: role,
             extraData: userExtraData
         )
 
@@ -161,9 +163,45 @@ class CurrentUserUpdater: Worker {
             completion?($0.error)
         }
     }
+
+    func loadAllUnreads(completion: @escaping ((Result<CurrentUserUnreads, Error>) -> Void)) {
+        apiClient.request(endpoint: .unreads()) { result in
+            switch result {
+            case .success(let response):
+                let unreads = response.asModel()
+                completion(.success(unreads))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+
+    /// Get all blocked users.
+    ///
+    /// - Parameter completion: Called when the API call is finished. Called with `Error` if the remote update fails.
+    ///
+    func loadBlockedUsers(completion: @escaping (Result<[BlockedUserDetails], Error>) -> Void) {
+        apiClient.request(endpoint: .loadBlockedUsers()) {
+            switch $0 {
+            case let .success(payload):
+                self.database.write({ session in
+                    session.currentUser?.blockedUserIds = Set(payload.blockedUsers.map(\.blockedUserId))
+                }, completion: {
+                    if let error = $0 {
+                        log.error("Failed to save blocked users to the database. Error: \(error)")
+                    }
+                    let blockedUsers = payload.blockedUsers.map {
+                        BlockedUserDetails(userId: $0.blockedUserId, blockedAt: $0.createdAt)
+                    }
+                    completion(.success(blockedUsers))
+                })
+            case let .failure(error):
+                completion(.failure(error))
+            }
+        }
+    }
 }
 
-@available(iOS 13.0, *)
 extension CurrentUserUpdater {
     func addDevice(_ device: PushDevice, currentUserId: UserId) async throws {
         try await withCheckedThrowingContinuation { continuation in
@@ -177,7 +215,7 @@ extension CurrentUserUpdater {
             }
         }
     }
-    
+
     func removeDevice(id: DeviceId, currentUserId: UserId) async throws {
         try await withCheckedThrowingContinuation { continuation in
             removeDevice(id: id, currentUserId: currentUserId) { error in
@@ -185,7 +223,7 @@ extension CurrentUserUpdater {
             }
         }
     }
-    
+
     func fetchDevices(currentUserId: UserId) async throws -> [Device] {
         try await withCheckedThrowingContinuation { continuation in
             fetchDevices(currentUserId: currentUserId) { result in
@@ -193,7 +231,7 @@ extension CurrentUserUpdater {
             }
         }
     }
-    
+
     func markAllRead(currentUserId: UserId) async throws {
         try await withCheckedThrowingContinuation { continuation in
             markAllRead { error in
@@ -201,11 +239,21 @@ extension CurrentUserUpdater {
             }
         }
     }
-    
+
+    func loadBlockedUsers() async throws -> [BlockedUserDetails] {
+        try await withCheckedThrowingContinuation { continuation in
+            loadBlockedUsers { result in
+                continuation.resume(with: result)
+            }
+        }
+    }
+
     func updateUserData(
         currentUserId: UserId,
         name: String?,
         imageURL: URL?,
+        privacySettings: UserPrivacySettings?,
+        role: UserRole?,
         userExtraData: [String: RawJSON]?
     ) async throws {
         try await withCheckedThrowingContinuation { continuation in
@@ -213,6 +261,8 @@ extension CurrentUserUpdater {
                 currentUserId: currentUserId,
                 name: name,
                 imageURL: imageURL,
+                privacySettings: privacySettings,
+                role: role,
                 userExtraData: userExtraData
             ) { error in
                 continuation.resume(with: error)

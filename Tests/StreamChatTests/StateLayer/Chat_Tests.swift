@@ -6,7 +6,6 @@
 @testable import StreamChatTestTools
 import XCTest
 
-@available(iOS 13.0, *)
 final class Chat_Tests: XCTestCase {
     private var env: TestEnvironment!
     private var chat: Chat!
@@ -618,6 +617,60 @@ final class Chat_Tests: XCTestCase {
         XCTAssertEqual(nil, message.localState)
     }
     
+    func test_updateMessage_whenTwoConsequtiveTextUpdates_thenWebSocketEventDoesNotResetTextToTheFirstEdit() async throws {
+        try await env.client.databaseContainer.write { session in
+            try session.saveChannel(payload: self.makeChannelPayload(messageCount: 1, createdAtOffset: 0))
+        }
+        try await setUpChat(usesMockedUpdaters: false)
+        await XCTAssertEqual(1, chat.state.messages.count)
+        let messages = await chat.state.messages
+        let messageId = try XCTUnwrap(messages.first?.id)
+        
+        // Edit the message twice before web-socket event comes for these edits
+        let textUpdate1 = "Editted text 1"
+        env.client.mockAPIClient.test_mockResponseResult(.success(EmptyResponse())) // typing indicator
+        env.client.mockAPIClient.test_mockResponseResult(.success(EmptyResponse())) // update message
+        try await chat.updateMessage(messageId, text: textUpdate1)
+        let queuedWSEventPayload1 = EventPayload(
+            eventType: .messageUpdated,
+            cid: channelId,
+            message: .dummy(
+                messageId: messageId,
+                text: textUpdate1,
+                cid: channelId,
+                messageTextUpdatedAt: Date()
+            )
+        )
+
+        env.client.mockAPIClient.test_mockResponseResult(.success(EmptyResponse())) // typing indicator
+        env.client.mockAPIClient.test_mockResponseResult(.success(EmptyResponse())) // update message
+        let textUpdate2 = "Editted text 2"
+        try await chat.updateMessage(messageId, text: textUpdate2)
+        let queuedWSEventPayload2 = EventPayload(
+            eventType: .messageUpdated,
+            cid: channelId,
+            message: .dummy(
+                messageId: messageId,
+                text: textUpdate2,
+                cid: channelId,
+                messageTextUpdatedAt: Date()
+            )
+        )
+        
+        // Web-socket events coming in with a delay
+        try await env.client.databaseContainer.write { session in
+            try session.saveEvent(payload: queuedWSEventPayload1)
+        }
+        let currentTextAfterEvent1 = try await MainActor.run { try XCTUnwrap(chat.localMessage(for: messageId)).text }
+        XCTAssertEqual(textUpdate2, currentTextAfterEvent1, "Latest edit should persist")
+        
+        try await env.client.databaseContainer.write { session in
+            try session.saveEvent(payload: queuedWSEventPayload2)
+        }
+        let currentTextAfterEvent2 = try await MainActor.run { try XCTUnwrap(chat.localMessage(for: messageId)).text }
+        XCTAssertEqual(textUpdate2, currentTextAfterEvent2, "Latest edit should persist")
+    }
+    
     // MARK: - Message Pagination and State
     
     func test_restoreMessages_whenExistingMessages_thenStateUpdates() async throws {
@@ -631,6 +684,20 @@ final class Chat_Tests: XCTestCase {
         
         // Accessing the state triggers loading the inital states
         await XCTAssertEqual(initialChannelPayload.messages.map(\.id), chat.state.messages.map(\.id))
+    }
+    
+    func test_restoreMessages_whenExistingMessagesWithPendingMessages_thenStateUpdates() async throws {
+        // DB has some older messages loaded
+        let initialChannelPayload = makeChannelPayload(messageCount: 3, createdAtOffset: 0)
+        try await env.client.mockDatabaseContainer.write { session in
+            try session.saveChannel(payload: initialChannelPayload)
+        }
+        
+        try await setUpChat(usesMockedUpdaters: false, loadState: false)
+        
+        // Accessing the state triggers loading the inital states
+        let allMessages = initialChannelPayload.messages + (initialChannelPayload.pendingMessages ?? [])
+        await XCTAssertEqual(allMessages.map(\.id), chat.state.messages.map(\.id))
     }
     
     func test_loadMessages_whenAPIRequestSucceeds_thenStateUpdates() async throws {
@@ -1461,6 +1528,7 @@ final class Chat_Tests: XCTestCase {
     private func makeChannelPayload(
         cid: ChannelId? = nil,
         messageCount: Int,
+        pendingMessagesCount: Int = 0,
         memberCount: Int = 0,
         watcherCount: Int = 0,
         createdAtOffset: Int
@@ -1472,6 +1540,14 @@ final class Chat_Tests: XCTestCase {
                 .dummy(
                     messageId: String(format: "%03d", $0 + createdAtOffset),
                     createdAt: Date(timeIntervalSinceReferenceDate: TimeInterval($0 + createdAtOffset)),
+                    cid: channelId
+                )
+            }
+        let pendingMessages: [MessagePayload] = (0..<pendingMessagesCount)
+            .map {
+                .dummy(
+                    messageId: String(format: "%03d", $0 + createdAtOffset + messageCount),
+                    createdAt: Date(timeIntervalSinceReferenceDate: TimeInterval($0 + createdAtOffset + messageCount)),
                     cid: channelId
                 )
             }
@@ -1492,7 +1568,8 @@ final class Chat_Tests: XCTestCase {
             channel: .dummy(cid: channelId),
             watchers: watchers,
             members: members,
-            messages: messages
+            messages: messages,
+            pendingMessages: pendingMessages
         )
     }
     
@@ -1529,7 +1606,7 @@ final class Chat_Tests: XCTestCase {
             .map { $0 + offset }
             .map {
                 .dummy(
-                    messageId: String(format: "%03d", $0),
+                    messageId: String(format: "reply_%03d", $0),
                     parentId: parentMessageId,
                     createdAt: Date(timeIntervalSinceReferenceDate: TimeInterval($0)),
                     cid: channelId
@@ -1539,7 +1616,6 @@ final class Chat_Tests: XCTestCase {
     }
 }
 
-@available(iOS 13.0, *)
 extension Chat_Tests {
     final class TestEnvironment {
         let client: ChatClient_Mock
@@ -1602,19 +1678,17 @@ extension Chat_Tests {
                 channelUpdaterBuilder: { [unowned self] in
                     self.channelUpdater = ChannelUpdater(
                         channelRepository: $0,
-                        callRepository: $1,
-                        messageRepository: $2,
-                        paginationStateHandler: $3,
-                        database: $4,
-                        apiClient: $5
+                        messageRepository: $1,
+                        paginationStateHandler: $2,
+                        database: $3,
+                        apiClient: $4
                     )
                     self.channelUpdaterMock = ChannelUpdater_Mock(
                         channelRepository: $0,
-                        callRepository: $1,
-                        messageRepository: $2,
-                        paginationStateHandler: $3,
-                        database: $4,
-                        apiClient: $5
+                        messageRepository: $1,
+                        paginationStateHandler: $2,
+                        database: $3,
+                        apiClient: $4
                     )
                     return usesMockedUpdaters ? self.channelUpdaterMock : self.channelUpdater
                 },

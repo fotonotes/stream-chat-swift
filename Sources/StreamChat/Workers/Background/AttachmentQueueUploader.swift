@@ -22,22 +22,19 @@ import Foundation
 class AttachmentQueueUploader: Worker {
     @Atomic private var pendingAttachmentIDs: Set<AttachmentId> = []
 
-    private let observer: ListDatabaseObserver<AttachmentDTO, AttachmentDTO>
+    private let observer: StateLayerDatabaseObserver<ListResult, AttachmentDTO, AttachmentDTO>
     private let attachmentPostProcessor: UploadedAttachmentPostProcessor?
     private let attachmentUpdater = AnyAttachmentUpdater()
     private let attachmentStorage = AttachmentStorage()
-    
-    // Any because CheckedContinuation<Void, Error> requires iOS 13
-    private var continuations = [AttachmentId: Any]()
+    private var continuations = [AttachmentId: CheckedContinuation<UploadedAttachment, Error>]()
     private let continuationsQueue = DispatchQueue(label: "co.getStream.ChatClient.AttachmentQueueUploader")
 
     var minSignificantUploadingProgressChange: Double = 0.05
 
     init(database: DatabaseContainer, apiClient: APIClient, attachmentPostProcessor: UploadedAttachmentPostProcessor?) {
-        observer = .init(
+        observer = StateLayerDatabaseObserver(
             context: database.backgroundReadOnlyContext,
-            fetchRequest: AttachmentDTO.pendingUploadFetchRequest(),
-            itemCreator: { $0 }
+            fetchRequest: AttachmentDTO.pendingUploadFetchRequest()
         )
         
         self.attachmentPostProcessor = attachmentPostProcessor
@@ -51,9 +48,10 @@ class AttachmentQueueUploader: Worker {
 
     private func startObserving() {
         do {
-            try observer.startObserving()
-            observer.onChange = { [weak self] in self?.handleChanges(changes: $0) }
-            let changes = observer.items.map { ListChange.insert($0, index: .init(item: 0, section: 0)) }
+            let items = try observer.startObserving(onContextDidChange: { [weak self] _, changes in
+                self?.handleChanges(changes: changes)
+            })
+            let changes = items.map { ListChange.insert($0, index: .init(item: 0, section: 0)) }
             handleChanges(changes: changes)
         } catch {
             log.error("Failed to start AttachmentUploader worker. \(error)")
@@ -135,9 +133,7 @@ class AttachmentQueueUploader: Worker {
 
     private func removePendingAttachment(with id: AttachmentId, result: Result<UploadedAttachment, Error>) {
         _pendingAttachmentIDs.mutate { $0.remove(id) }
-        if #available(iOS 13.0, *) {
-            notifyAPIRequestFinished(for: id, result: result)
-        }
+        notifyAPIRequestFinished(for: id, result: result)
     }
 
     private func updateAttachmentIfNeeded(
@@ -304,7 +300,6 @@ private class AttachmentStorage {
 
 // MARK: - Chat State Layer
 
-@available(iOS 13.0, *)
 extension AttachmentQueueUploader {
     func waitForAPIRequest(attachmentId: AttachmentId) async throws -> UploadedAttachment {
         try await withCheckedThrowingContinuation { continuation in
@@ -326,7 +321,7 @@ extension AttachmentQueueUploader {
         result: Result<UploadedAttachment, Error>
     ) {
         continuationsQueue.async {
-            guard let continuation = self.continuations.removeValue(forKey: attachmentId) as? CheckedContinuation<UploadedAttachment, Error> else { return }
+            guard let continuation = self.continuations.removeValue(forKey: attachmentId) else { return }
             continuation.resume(with: result)
         }
     }

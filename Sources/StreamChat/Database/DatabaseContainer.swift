@@ -77,13 +77,14 @@ class DatabaseContainer: NSPersistentContainer {
         return context
     }()
 
+    private var canWriteData = true
     private var stateLayerContextRefreshObservers = [NSObjectProtocol]()
     private var loggerNotificationObserver: NSObjectProtocol?
     private let localCachingSettings: ChatClientConfig.LocalCaching?
     private let deletedMessageVisibility: ChatClientConfig.DeletedMessageVisibility?
     private let shouldShowShadowedMessages: Bool?
 
-    static var cachedModel: NSManagedObjectModel?
+    static var cachedModels = [String: NSManagedObjectModel]()
 
     /// All `NSManagedObjectContext`s this container owns.
     private(set) lazy var allContext: [NSManagedObjectContext] = [viewContext, backgroundReadOnlyContext, stateLayerContext, writableContext]
@@ -111,7 +112,7 @@ class DatabaseContainer: NSPersistentContainer {
         shouldShowShadowedMessages: Bool? = nil
     ) {
         let managedObjectModel: NSManagedObjectModel
-        if let cachedModel = Self.cachedModel {
+        if let cachedModel = Self.cachedModels[modelName] {
             managedObjectModel = cachedModel
         } else {
             // It's safe to unwrap the following values because this is not settable by users and it's always a programmer error.
@@ -119,7 +120,7 @@ class DatabaseContainer: NSPersistentContainer {
             let modelURL = bundle.url(forResource: modelName, withExtension: "momd")!
             let model = NSManagedObjectModel(contentsOf: modelURL)!
             managedObjectModel = model
-            Self.cachedModel = model
+            Self.cachedModels[modelName] = model
         }
 
         self.localCachingSettings = localCachingSettings
@@ -190,13 +191,7 @@ class DatabaseContainer: NSPersistentContainer {
 
         switch kind {
         case .inMemory:
-            // So, it seems that on iOS 13, we have to use SQLite store with /dev/null URL, but on iOS 11 & 12
-            // we have to use `NSInMemoryStoreType`.
-            if #available(iOS 13, *) {
-                description.url = URL(fileURLWithPath: "/dev/null")
-            } else {
-                description.type = NSInMemoryStoreType
-            }
+            description.url = URL(fileURLWithPath: "/dev/null")
 
         case let .onDisk(databaseFileURL):
             description.url = databaseFileURL
@@ -223,6 +218,12 @@ class DatabaseContainer: NSPersistentContainer {
     func write(_ actions: @escaping (DatabaseSession) throws -> Void, completion: @escaping (Error?) -> Void) {
         writableContext.perform {
             log.debug("Starting a database session.", subsystems: .database)
+            guard self.canWriteData else {
+                log.debug("Discarding write attempt.", subsystems: .database)
+                completion(nil)
+                return
+            }
+            
             do {
                 FetchCache.clear()
                 try actions(self.writableContext)
@@ -252,7 +253,6 @@ class DatabaseContainer: NSPersistentContainer {
         }
     }
     
-    @available(iOS 13.0, *)
     func write(_ actions: @escaping (DatabaseSession) throws -> Void) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             write(actions) { error in
@@ -264,50 +264,85 @@ class DatabaseContainer: NSPersistentContainer {
             }
         }
     }
-    
-    @available(iOS 13.0, *)
-    func read<T>(_ actions: @escaping (NSManagedObjectContext) throws -> T) async throws -> T {
-        let context = stateLayerContext
-        return try await withCheckedThrowingContinuation { continuation in
-            context.perform {
-                do {
-                    let results = try actions(context)
-                    if context.hasChanges {
-                        assertionFailure("State layer context is read only, but calling actions() created changes")
-                    }
-                    continuation.resume(returning: results)
-                } catch {
-                    continuation.resume(throwing: error)
+        
+    private func read<T>(
+        from context: NSManagedObjectContext,
+        _ actions: @escaping (DatabaseSession) throws -> T,
+        completion: @escaping (Result<T, Error>) -> Void
+    ) {
+        context.perform {
+            do {
+                let changeCounts = context.currentChangeCounts()
+                let results = try actions(context)
+                if changeCounts != context.currentChangeCounts() {
+                    assertionFailure("Context is read only, but actions created changes: (updated=\(context.updatedObjects), inserted=\(context.insertedObjects), deleted=\(context.deletedObjects)")
                 }
+                completion(.success(results))
+            } catch {
+                completion(.failure(error))
+            }
+        }
+    }
+    
+    func read<T>(_ actions: @escaping (DatabaseSession) throws -> T, completion: @escaping (Result<T, Error>) -> Void) {
+        read(from: backgroundReadOnlyContext, actions, completion: completion)
+    }
+    
+    func read<T>(_ actions: @escaping (DatabaseSession) throws -> T) async throws -> T {
+        try await withCheckedThrowingContinuation { continuation in
+            read(from: stateLayerContext, actions) { result in
+                continuation.resume(with: result)
             }
         }
     }
 
     /// Removes all data from the local storage.
     func removeAllData(completion: ((Error?) -> Void)? = nil) {
-        /// Cleanup the current user cache for all manage object contexts.
-        allContext.forEach { context in
-            context.perform {
-                context.invalidateCurrentUserCache()
-                context.reset()
-            }
-        }
-
-        writableContext.performAndWait { [weak self] in
-            let entityNames = self?.managedObjectModel.entities.compactMap(\.name)
-            var deleteError: Error?
-            entityNames?.forEach { [weak self] entityName in
-                let deleteFetch = NSFetchRequest<NSFetchRequestResult>(entityName: entityName)
-                let deleteRequest = NSBatchDeleteRequest(fetchRequest: deleteFetch)
+        let entityNames = managedObjectModel.entities.compactMap(\.name)
+        writableContext.perform { [weak self] in
+            self?.canWriteData = false
+            let requests = entityNames
+                .map { NSFetchRequest<NSFetchRequestResult>(entityName: $0) }
+                .map { fetchRequest in
+                    let batchDelete = NSBatchDeleteRequest(fetchRequest: fetchRequest)
+                    batchDelete.resultType = .resultTypeObjectIDs
+                    return batchDelete
+                }
+            var lastEncounteredError: Error?
+            var deletedObjectIds = [NSManagedObjectID]()
+            for request in requests {
                 do {
-                    try self?.writableContext.execute(deleteRequest)
-                    try self?.writableContext.save()
+                    let result = try self?.writableContext.execute(request) as? NSBatchDeleteResult
+                    if let objectIds = result?.result as? [NSManagedObjectID] {
+                        deletedObjectIds.append(contentsOf: objectIds)
+                    }
                 } catch {
                     log.error("Batch delete request failed with error \(error)")
-                    deleteError = error
+                    lastEncounteredError = error
                 }
             }
-            completion?(deleteError)
+            if !deletedObjectIds.isEmpty, let contexts = self?.allContext {
+                log.debug("Merging \(deletedObjectIds.count) deletions to contexts", subsystems: .database)
+                // Merging changes triggers DB observers to react to deletions
+                NSManagedObjectContext.mergeChanges(
+                    fromRemoteContextSave: [NSDeletedObjectsKey: deletedObjectIds],
+                    into: contexts
+                )
+            }
+            // Finally reset states of all the contexts after batch delete and deletion propagation.
+            if let writableContext = self?.writableContext, let allContext = self?.allContext {
+                writableContext.invalidateCurrentUserCache()
+                writableContext.reset()
+                
+                for context in allContext where context != writableContext {
+                    context.performAndWait {
+                        context.invalidateCurrentUserCache()
+                        context.reset()
+                    }
+                }
+            }
+            self?.canWriteData = true
+            completion?(lastEncounteredError)
         }
     }
 
@@ -419,6 +454,14 @@ extension NSManagedObjectContext {
         insertedObjects.forEach { discardChanges(for: $0) }
         updatedObjects.forEach { discardChanges(for: $0) }
         deletedObjects.forEach { discardChanges(for: $0) }
+    }
+    
+    fileprivate func currentChangeCounts() -> [String: Int] {
+        [
+            "inserted": insertedObjects.count,
+            "updated": updatedObjects.count,
+            "deleted": deletedObjects.count
+        ]
     }
     
     func observeChanges(in otherContext: NSManagedObjectContext) -> NSObjectProtocol {

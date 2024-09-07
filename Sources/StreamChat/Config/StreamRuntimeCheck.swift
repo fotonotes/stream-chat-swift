@@ -12,11 +12,6 @@ public enum StreamRuntimeCheck {
 
     /// For *internal use* only
     ///
-    ///  Enables background mapping of DB models
-    public static var _isBackgroundMappingEnabled = false
-
-    /// For *internal use* only
-    ///
     ///  Established the maximum depth of relationships to fetch when performing a mapping
     ///
     ///  Eg.
@@ -29,13 +24,16 @@ public enum StreamRuntimeCheck {
     ///
     ///  Returns true if the maximum depth of relationships to fetch when performing a mapping is not yet met
     static func _canFetchRelationship(currentDepth: Int) -> Bool {
-        guard _isBackgroundMappingEnabled else { return true }
-
-        return currentDepth <= _backgroundMappingRelationshipsMaxDepth
+        currentDepth <= _backgroundMappingRelationshipsMaxDepth
     }
     
     /// For *internal use* only
     ///
-    ///  Enables using our legacy web socket connection.
-    public static var _useLegacyWebSocketConnection = false
+    /// Enables reusing unchanged converted items in database observers.
+    public static var _isDatabaseObserverItemReusingEnabled = true
+    
+    /// For *internal use* only
+    ///
+    /// Uses version 2 for offline state sync.
+    public static var _isSyncV2Enabled = true
 }

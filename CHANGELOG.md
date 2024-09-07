@@ -3,6 +3,133 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 # Upcoming
 
+### 🔄 Changed
+
+# [4.62.0](https://github.com/GetStream/stream-chat-swift/releases/tag/4.62.0)
+_August 15, 2024_
+
+## StreamChat
+### ⚡ Performance
+- Use background database observers for `CurrentUserController.currentUser`, `ChatChannelMemberListController.members`, and `ChatMessageController.message` which reduces CPU usage on the main thread [#3357](https://github.com/GetStream/stream-chat-swift/pull/3357)
+- `CurrentChatUserController` was often recreated when sending typing events [#3372](https://github.com/GetStream/stream-chat-swift/pull/3372)
+- Reduce latency of the `BackgroundDatabaseObserver` by reducing thread switching when handling changes [#3373](https://github.com/GetStream/stream-chat-swift/pull/3373)
+### 🐞 Fixed
+- Fix an issue where pending messages ([moderation feature](https://getstream.io/chat/docs/ios-swift/pending_messages/)) were not visible after returning to the channel [#3378](https://github.com/GetStream/stream-chat-swift/pull/3378)
+- Fix rare crashes when deleting local database content on logout [#3355](https://github.com/GetStream/stream-chat-swift/pull/3355)
+- Fix rare crashes in `MulticastDelegate` when accessing it concurrently [#3361](https://github.com/GetStream/stream-chat-swift/pull/3361)
+- Fix reading the local database state just after the initial write [#3373](https://github.com/GetStream/stream-chat-swift/pull/3373)
+- Fix a timing issue where accessing channels in `controllerWillChangeChannels` returned already changed channels [#3373](https://github.com/GetStream/stream-chat-swift/pull/3373)
+### 🔄 Changed
+- Made loadBlockedUsers in ConnectedUser public [#3352](https://github.com/GetStream/stream-chat-swift/pull/3352)
+- Removed Agora and 100ms related code, the recommended way to support calls is to use StreamVideo [#3364](https://github.com/GetStream/stream-chat-swift/pull/3364)
+- Run offline state sync in the background instead of pausing other API requests while it runs [#3367](https://github.com/GetStream/stream-chat-swift/pull/3367)
+
+# [4.61.0](https://github.com/GetStream/stream-chat-swift/releases/tag/4.61.0)
+_July 30, 2024_
+
+## StreamChat
+### ⚡ Performance
+- Improve performance of `ChatChannel` database model conversions more than 7 times [#3325](https://github.com/GetStream/stream-chat-swift/pull/3325)
+- Improve performance of `ChatChannel` and `ChatMessage` equality checks [#3335](https://github.com/GetStream/stream-chat-swift/pull/3335)
+### ✅ Added
+- Expose `MissingConnectionId` + `InvalidURL` + `InvalidJSON` Errors [#3332](https://github.com/GetStream/stream-chat-swift/pull/3332)
+- Add support for `.hasUnread` filter key to `ChannelListQuery` [#3340](https://github.com/GetStream/stream-chat-swift/pull/3340)
+### 🐞 Fixed
+- Fix a rare issue with incorrect message order when sending multiple messages while offline [#3316](https://github.com/GetStream/stream-chat-swift/issues/3316)
+- Fix sorting channel list by unread count [#3340](https://github.com/GetStream/stream-chat-swift/pull/3340)
+
+## StreamChatUI
+### 🐞 Fixed
+- Fix message search not showing results for new search terms [#3345](https://github.com/GetStream/stream-chat-swift/pull/3345)
+
+# [4.60.0](https://github.com/GetStream/stream-chat-swift/releases/tag/4.60.0)
+_July 18, 2024_
+
+## StreamChat
+### ✅ Added
+- Add an option to configure a reconnection timeout [#3303](https://github.com/GetStream/stream-chat-swift/pull/3303)
+### 🐞 Fixed
+- Improve the stability of the reconnection process [#3303](https://github.com/GetStream/stream-chat-swift/pull/3303)
+- Fix invalid token errors considered as recoverable errors [#3303](https://github.com/GetStream/stream-chat-swift/pull/3303)
+- Fix crashes in `LazyCachedMapCollection` when logging out an user [3299](https://github.com/GetStream/stream-chat-swift/pull/3299)
+### 🔄 Changed
+- Dropped iOS 12 support [#3285](https://github.com/GetStream/stream-chat-swift/pull/3285)
+- Increase QoS for `Throttler` and `Debouncer` to `utility` [#3297](https://github.com/GetStream/stream-chat-swift/issues/3297)
+- Improve reliability of accessing data in controllers' completion handlers [#3305](https://github.com/GetStream/stream-chat-swift/issues/3305)
+
+## StreamChatUI
+### ✅ Added
+- Add support for enabling message list view animations [#3314](https://github.com/GetStream/stream-chat-swift/pull/3314)
+### 🐞 Fixed
+- Fix Channel List not hiding error state view when data is available [#3303](https://github.com/GetStream/stream-chat-swift/pull/3303)
+
+# [4.59.0](https://github.com/GetStream/stream-chat-swift/releases/tag/4.59.0)
+_July 10, 2024_
+
+## ⚠️ Important
+- This is the last SDK version that will support iOS 12 as the minimum deployment target.
+- Our next release will have iOS 13 as the minimum deployment target.
+
+## StreamChat
+### ✅ Added
+- Add support for user blocking [#3223](https://github.com/GetStream/stream-chat-swift/pull/3223)
+- [Threads v2] Add support for Threads v2 [#3229](https://github.com/GetStream/stream-chat-swift/pull/3229)
+   - Add `ChatThreadListController` to fetch current user threads
+   - Add `ChatMessageController.markThreadRead()` 
+   - Add `ChatMessageController.markThreadUnread()`
+   - Add `ChatMessageController.updateThread()`
+   - Add `ChatMessageController.loadThread()`
+   - Add `ChatCurrentUserController.loadAllUnreads()`
+   - Add `CurrentChatUser.unreadCount.threads`
+### 🐞 Fixed
+- Fix user not able to connect when the user name contains a semicolon [#3275](https://github.com/GetStream/stream-chat-swift/pull/3275)
+### 🔄 Changed
+- Add additional fields to the `Equatable` conformance in `ChatChannel` and `ChatMessage` [#3277](https://github.com/GetStream/stream-chat-swift/issues/3277)
+
+## StreamChatUI
+### ✅ Added
+- [Threads v2] Add `ChatThreadListVC` UI Component [#3229](https://github.com/GetStream/stream-chat-swift/pull/3229)
+   - Marks a thread read when reaching the bottom of the replies in `ChatThreadVC`
+   - Marking the parent message of a thread as unread in `ChatThreadVC` will mark the thread as unread
+### 🔄 Changed
+- `ChatChannelUnreadCountView` now shares a common view (`badgeView`) with `ChatThreadUnreadCountView` [#3229](https://github.com/GetStream/stream-chat-swift/pull/3229)
+### 🎭 New Localizations
+- `message.item.deleted`
+- `threadListItem.replied-to`
+- `threadList.empty.description`
+- `threadList.error.message`
+- `threadList.new-threads`
+
+# [4.58.0](https://github.com/GetStream/stream-chat-swift/releases/tag/4.58.0)
+_June 26, 2024_
+
+## StreamChat
+### ✅ Added
+- Add `role` argument to partial user updates [#3253](https://github.com/GetStream/stream-chat-swift/pull/3253)
+### 🐞 Fixed
+- Fix `channel.pinnedMessages` with missing messages [#3244](https://github.com/GetStream/stream-chat-swift/pull/3244)
+- Fix notifications muted state for the current user in channel members [#3239](https://github.com/GetStream/stream-chat-swift/pull/3239)
+- Reset channel members and watchers state when fetching the initial state of the channel [#3245](https://github.com/GetStream/stream-chat-swift/pull/3245)
+- Fix inconsistent message text when extremely quickly updating it [#3242](https://github.com/GetStream/stream-chat-swift/pull/3242)
+- Fix message attachments returning nil sometimes in push notification extensions [#3263](https://github.com/GetStream/stream-chat-swift/pull/3263)
+- Significantly improve performance of database observers [#3260](https://github.com/GetStream/stream-chat-swift/pull/3260)
+### 🔄 Changed
+- Enable background mapping by default, which improves performance overall [#3250](https://github.com/GetStream/stream-chat-swift/pull/3250)
+
+## StreamChatUI
+### 🐞 Fixed
+- Fix an issue with markdown ordered list processing [#3234](https://github.com/GetStream/stream-chat-swift/issues/3234)
+
+# [4.57.0](https://github.com/GetStream/stream-chat-swift/releases/tag/4.57.0)
+_June 06, 2024_
+
+## StreamChat
+### ✅ Added
+- Low-level client support for Polls - creating different types of polls, adding and removing votes, comments, and more [#3220](https://github.com/GetStream/stream-chat-swift/pull/3220)
+
+# [4.56.1](https://github.com/GetStream/stream-chat-swift/releases/tag/4.56.1)
+_May 23, 2024_
+
 ## StreamChatUI
 ### 🐞 Fixed
 - Do not re-display suggestion view on each character change [#3215](https://github.com/GetStream/stream-chat-swift/pull/3215)

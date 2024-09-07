@@ -54,11 +54,10 @@ public class ChatUserListController: DataController, DelegateCallable, DataStore
     }
 
     /// Used for observing the database for changes.
-    private(set) lazy var userListObserver: ListDatabaseObserverWrapper<ChatUser, UserDTO> = {
+    private(set) lazy var userListObserver: BackgroundListDatabaseObserver<ChatUser, UserDTO> = {
         let request = UserDTO.userListFetchRequest(query: self.query)
 
         let observer = self.environment.createUserListDabaseObserver(
-            StreamRuntimeCheck._isBackgroundMappingEnabled,
             client.databaseContainer,
             request,
             { try $0.asModel() }
@@ -82,7 +81,6 @@ public class ChatUserListController: DataController, DelegateCallable, DataStore
     /// An internal backing object for all publicly available Combine publishers. We use it to simplify the way we expose
     /// publishers. Instead of creating custom `Publisher` types, we use `CurrentValueSubject` and `PassthroughSubject` internally,
     /// and expose the published values by mapping them to a read-only `AnyPublisher` type.
-    @available(iOS 13, *)
     var basePublishers: BasePublishers {
         if let value = _basePublishers as? BasePublishers {
             return value
@@ -161,13 +159,17 @@ extension ChatUserListController {
         ) -> UserListUpdater = UserListUpdater.init
 
         var createUserListDabaseObserver: (
-            _ isBackgroundMappingEnabled: Bool,
             _ database: DatabaseContainer,
             _ fetchRequest: NSFetchRequest<UserDTO>,
             _ itemCreator: @escaping (UserDTO) throws -> ChatUser
         )
-            -> ListDatabaseObserverWrapper<ChatUser, UserDTO> = {
-                ListDatabaseObserverWrapper(isBackground: $0, database: $1, fetchRequest: $2, itemCreator: $3)
+            -> BackgroundListDatabaseObserver<ChatUser, UserDTO> = {
+                BackgroundListDatabaseObserver(
+                    database: $0,
+                    fetchRequest: $1,
+                    itemCreator: $2,
+                    itemReuseKeyPaths: (\ChatUser.id, \UserDTO.id)
+                )
             }
     }
 }

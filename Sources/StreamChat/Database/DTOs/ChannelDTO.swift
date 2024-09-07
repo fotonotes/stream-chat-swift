@@ -41,6 +41,8 @@ class ChannelDTO: NSManagedObject {
     @NSManaged var isFrozen: Bool
     @NSManaged var cooldownDuration: Int
     @NSManaged var team: String?
+    
+    @NSManaged var isBlocked: Bool
 
     // MARK: - Queries
 
@@ -51,6 +53,7 @@ class ChannelDTO: NSManagedObject {
 
     @NSManaged var createdBy: UserDTO?
     @NSManaged var members: Set<MemberDTO>
+    @NSManaged var threads: Set<ThreadDTO>
 
     /// If the current user is a member of the channel, this is their MemberDTO
     @NSManaged var membership: MemberDTO?
@@ -58,6 +61,7 @@ class ChannelDTO: NSManagedObject {
     @NSManaged var messages: Set<MessageDTO>
     @NSManaged var pinnedMessages: Set<MessageDTO>
     @NSManaged var reads: Set<ChannelReadDTO>
+    @NSManaged var currentUserUnreadMessagesCount: Int32
     @NSManaged var watchers: Set<UserDTO>
     @NSManaged var memberListQueries: Set<ChannelMemberListQueryDTO>
     @NSManaged var previewMessage: MessageDTO?
@@ -70,6 +74,16 @@ class ChannelDTO: NSManagedObject {
 
         guard !isDeleted else {
             return
+        }
+
+        // Update the unreadMessagesCount for the current user.
+        // At the moment this computed property is used for `hasUnread` automatic channel list filtering.
+        if let currentUserId = managedObjectContext?.currentUser?.user.id {
+            let currentUserUnread = reads.first(where: { $0.user.id == currentUserId })
+            let newUnreadCount = currentUserUnread?.unreadMessageCount ?? 0
+            if newUnreadCount != currentUserUnreadMessagesCount {
+                currentUserUnreadMessagesCount = newUnreadCount
+            }
         }
 
         // Change to the `truncatedAt` value have effect on messages, we need to mark them dirty manually
@@ -224,6 +238,14 @@ extension NSManagedObjectContext {
         }
 
         dto.isFrozen = payload.isFrozen
+        
+        // Backend only returns a boolean
+        // for blocked 1:1 channels on channel list query
+        if let isBlocked = payload.isBlocked {
+            dto.isBlocked = isBlocked
+        } else {
+            dto.isBlocked = false
+        }
 
         // Backend only returns a boolean for hidden state
         // on channel query and channel list query
@@ -268,7 +290,8 @@ extension NSManagedObjectContext {
         dto.reads = reads
 
         try payload.messages.forEach { _ = try saveMessage(payload: $0, channelDTO: dto, syncOwnReactions: true, cache: cache) }
-
+        try payload.pendingMessages?.forEach { _ = try saveMessage(payload: $0, channelDTO: dto, syncOwnReactions: true, cache: cache) }
+        
         if dto.needsPreviewUpdate(payload) {
             dto.previewMessage = preview(for: payload.channel.cid)
         }
@@ -279,17 +302,18 @@ extension NSManagedObjectContext {
             _ = try saveMessage(payload: $0, channelDTO: dto, syncOwnReactions: true, cache: cache)
         }
 
-        // Sometimes, `members` are not part of `ChannelDetailPayload` so they need to be saved here too.
-        try payload.members.forEach {
-            let member = try saveMember(payload: $0, channelId: payload.channel.cid, query: nil, cache: cache)
-            dto.members.insert(member)
-        }
-
+        // Note: membership payload should be saved before all the members
         if let membership = payload.membership {
             let membership = try saveMember(payload: membership, channelId: payload.channel.cid, query: nil, cache: cache)
             dto.membership = membership
         } else {
             dto.membership = nil
+        }
+        
+        // Sometimes, `members` are not part of `ChannelDetailPayload` so they need to be saved here too.
+        try payload.members.forEach {
+            let member = try saveMember(payload: $0, channelId: payload.channel.cid, query: nil, cache: cache)
+            dto.members.insert(member)
         }
 
         dto.watcherCount = Int64(clamping: payload.watcherCount ?? 0)
@@ -372,6 +396,18 @@ extension ChannelDTO {
         request.fetchBatchSize = query.pagination.pageSize
         return request
     }
+    
+    static func directMessageChannel(participantId: UserId, context: NSManagedObjectContext) -> ChannelDTO? {
+        let request = NSFetchRequest<ChannelDTO>(entityName: ChannelDTO.entityName)
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \ChannelDTO.updatedAt, ascending: false)]
+        request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            NSPredicate(format: "cid CONTAINS ':!members'"),
+            NSPredicate(format: "members.@count == 2"),
+            NSPredicate(format: "ANY members.user.id == %@", participantId)
+        ])
+        request.fetchLimit = 1
+        return try? context.fetch(request).first
+    }
 }
 
 extension ChannelDTO {
@@ -410,95 +446,90 @@ extension ChatChannel {
             )
             extraData = [:]
         }
-
+        
+        let sortedMessageDTOs = dto.messages.sorted(by: { $0.createdAt.bridgeDate > $1.createdAt.bridgeDate })
         let reads: [ChatChannelRead] = try dto.reads.map { try $0.asModel() }
-
-        let unreadCount: () -> ChannelUnreadCount = {
-            guard dto.isValid, let currentUser = context.currentUser else {
+        let unreadCount: ChannelUnreadCount = {
+            guard let currentUserDTO = context.currentUser else {
                 return .noUnread
             }
-
-            guard currentUser.user.isValid else {
-                return .noUnread
-            }
-
-            let currentUserRead = reads.first(where: { $0.user.id == currentUser.user.id })
-
+            let currentUserRead = reads.first(where: { $0.user.id == currentUserDTO.user.id })
             let allUnreadMessages = currentUserRead?.unreadMessagesCount ?? 0
-
-            // Fetch count of all mentioned messages after last read
-            // (this is not 100% accurate but it's the best we have)
-            let unreadMentionsRequest = NSFetchRequest<MessageDTO>(entityName: MessageDTO.entityName)
-            unreadMentionsRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
-                MessageDTO.channelMessagesPredicate(
-                    for: dto.cid,
-                    deletedMessagesVisibility: context.deletedMessagesVisibility ?? .visibleForCurrentUser,
-                    shouldShowShadowedMessages: context.shouldShowShadowedMessages ?? false
-                ),
-                NSPredicate(format: "createdAt > %@", currentUserRead?.lastReadAt.bridgeDate ?? DBDate(timeIntervalSince1970: 0)),
-                NSPredicate(format: "%@ IN mentionedUsers", currentUser.user)
-            ])
-
-            guard dto.isValid, currentUser.user.isValid else { return .noUnread }
-
-            do {
-                return ChannelUnreadCount(
-                    messages: allUnreadMessages,
-                    mentions: try context.count(for: unreadMentionsRequest)
-                )
-            } catch {
-                log.error("Failed to fetch unread counts for channel `\(cid)`. Error: \(error)")
+            // Therefore, no unread messages with mentions and we can skip the fetch
+            if allUnreadMessages == 0 {
                 return .noUnread
             }
-        }
+            let unreadMentionsCount = sortedMessageDTOs
+                .prefix(allUnreadMessages)
+                .filter { $0.mentionedUsers.contains(currentUserDTO.user) }
+                .count
+            return ChannelUnreadCount(
+                messages: allUnreadMessages,
+                mentions: unreadMentionsCount
+            )
+        }()
 
-        let fetchMessages: () -> [ChatMessage] = {
-            guard dto.isValid else { return [] }
-            return MessageDTO
-                .load(
-                    for: dto.cid,
-                    limit: dto.managedObjectContext?.localCachingSettings?.chatChannel.latestMessagesLimit ?? 25,
-                    deletedMessagesVisibility: dto.managedObjectContext?.deletedMessagesVisibility ?? .visibleForCurrentUser,
-                    shouldShowShadowedMessages: dto.managedObjectContext?.shouldShowShadowedMessages ?? false,
-                    context: context
-                )
+        let latestMessages: [ChatMessage] = {
+            var messages = sortedMessageDTOs
+                .prefix(dto.managedObjectContext?.localCachingSettings?.chatChannel.latestMessagesLimit ?? 25)
                 .compactMap { try? $0.relationshipAsModel(depth: depth) }
-        }
+            if let oldest = dto.oldestMessageAt?.bridgeDate {
+                messages = messages.filter { $0.createdAt >= oldest }
+            }
+            if let truncated = dto.truncatedAt?.bridgeDate {
+                messages = messages.filter { $0.createdAt >= truncated }
+            }
+            return messages
+        }()
 
-        let fetchLatestMessageFromUser: () -> ChatMessage? = {
-            guard dto.isValid, let currentUser = context.currentUser else { return nil }
-
-            return try? MessageDTO
-                .loadLastMessage(
-                    from: currentUser.user.id,
-                    in: dto.cid,
-                    context: context
-                )?
+        let latestMessageFromUser: ChatMessage? = {
+            guard let currentUserId = context.currentUser?.user.id else { return nil }
+            return try? sortedMessageDTOs
+                .first(where: { messageDTO in
+                    guard messageDTO.user.id == currentUserId else { return false }
+                    guard messageDTO.localMessageState == nil else { return false }
+                    return messageDTO.type != MessageType.ephemeral.rawValue
+                })?
                 .relationshipAsModel(depth: depth)
-        }
+        }()
+        
+        let watchers = dto.watchers
+            .sorted { lhs, rhs in
+                let lhsActivity = lhs.lastActivityAt?.bridgeDate ?? .distantPast
+                let rhsActivity = rhs.lastActivityAt?.bridgeDate ?? .distantPast
+                if lhsActivity == rhsActivity {
+                    return lhs.id > rhs.id
+                }
+                return lhsActivity > rhsActivity
+            }
+            .prefix(context.localCachingSettings?.chatChannel.lastActiveWatchersLimit ?? 100)
+            .compactMap { try? $0.asModel() }
+        
+        let members = dto.members
+            .sorted { lhs, rhs in
+                let lhsActivity = lhs.user.lastActivityAt?.bridgeDate ?? .distantPast
+                let rhsActivity = rhs.user.lastActivityAt?.bridgeDate ?? .distantPast
+                if lhsActivity == rhsActivity {
+                    return lhs.id > rhs.id
+                }
+                return lhsActivity > rhsActivity
+            }
+            .prefix(context.localCachingSettings?.chatChannel.lastActiveMembersLimit ?? 100)
+            .compactMap { try? $0.asModel() }
 
-        let fetchWatchers: () -> [ChatUser] = {
-            UserDTO
-                .loadLastActiveWatchers(cid: cid, context: context)
-                .compactMap { try? $0.asModel() }
-        }
-
-        let fetchMembers: () -> [ChatChannelMember] = {
-            MemberDTO
-                .loadLastActiveMembers(cid: cid, context: context)
-                .compactMap { try? $0.asModel() }
-        }
-
-        let fetchMuteDetails: () -> MuteDetails? = {
+        let muteDetails: MuteDetails? = {
             guard let mute = dto.mute else { return nil }
-
             return .init(
                 createdAt: mute.createdAt.bridgeDate,
                 updatedAt: mute.updatedAt.bridgeDate,
                 expiresAt: mute.expiresAt?.bridgeDate
             )
-        }
-
+        }()
+        let membership = try dto.membership.map { try $0.asModel() }
+        let pinnedMessages = dto.pinnedMessages.compactMap { try? $0.relationshipAsModel(depth: depth) }
+        let previewMessage = try? dto.previewMessage?.relationshipAsModel(depth: depth)
+        let typingUsers = Set(dto.currentlyTypingUsers.compactMap { try? $0.asModel() })
+        
         return try ChatChannel(
             cid: cid,
             name: dto.name,
@@ -513,24 +544,23 @@ extension ChatChannel {
             config: dto.config.asModel(),
             ownCapabilities: Set(dto.ownCapabilities.compactMap(ChannelCapability.init(rawValue:))),
             isFrozen: dto.isFrozen,
-            lastActiveMembers: { fetchMembers() },
-            membership: dto.membership.map { try $0.asModel() },
-            currentlyTypingUsers: { Set(dto.currentlyTypingUsers.compactMap { try? $0.asModel() }) },
-            lastActiveWatchers: { fetchWatchers() },
+            isBlocked: dto.isBlocked,
+            lastActiveMembers: members,
+            membership: membership,
+            currentlyTypingUsers: typingUsers,
+            lastActiveWatchers: watchers,
             team: dto.team,
-            unreadCount: { unreadCount() },
+            unreadCount: unreadCount,
             watcherCount: Int(dto.watcherCount),
             memberCount: Int(dto.memberCount),
             reads: reads,
             cooldownDuration: Int(dto.cooldownDuration),
             extraData: extraData,
-            //            invitedMembers: [],
-            latestMessages: { fetchMessages() },
-            lastMessageFromCurrentUser: { fetchLatestMessageFromUser() },
-            pinnedMessages: { dto.pinnedMessages.compactMap { try? $0.relationshipAsModel(depth: depth) } },
-            muteDetails: fetchMuteDetails,
-            previewMessage: { try? dto.previewMessage?.relationshipAsModel(depth: depth) },
-            underlyingContext: dto.managedObjectContext
+            latestMessages: latestMessages,
+            lastMessageFromCurrentUser: latestMessageFromUser,
+            pinnedMessages: pinnedMessages,
+            muteDetails: muteDetails,
+            previewMessage: previewMessage
         )
     }
 }

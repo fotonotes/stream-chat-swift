@@ -58,8 +58,8 @@ struct DefaultRequestDecoder: RequestDecoder {
                 throw ClientError.Unknown("Unknown error. Server response: \(httpResponse).")
             }
 
-            if serverError.isInvalidTokenError {
-                log.info("Request failed because of an experied token.", subsystems: .httpRequests)
+            if serverError.isExpiredTokenError {
+                log.info("Request failed because of an expired token.", subsystems: .httpRequests)
                 throw ClientError.ExpiredToken()
             }
 
@@ -86,11 +86,11 @@ struct DefaultRequestDecoder: RequestDecoder {
 }
 
 extension ClientError {
-    class ExpiredToken: ClientError {}
-    class RefreshingToken: ClientError {}
-    class TokenRefreshed: ClientError {}
-    class ConnectionError: ClientError {}
-    class ResponseBodyEmpty: ClientError {
+    final class ExpiredToken: ClientError {}
+    final class RefreshingToken: ClientError {}
+    final class TokenRefreshed: ClientError {}
+    final class ConnectionError: ClientError {}
+    final class ResponseBodyEmpty: ClientError {
         override var localizedDescription: String { "Response body is empty." }
     }
 

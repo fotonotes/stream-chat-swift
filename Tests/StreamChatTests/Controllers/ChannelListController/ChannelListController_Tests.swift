@@ -63,7 +63,7 @@ final class ChannelListController_Tests: XCTestCase {
         env.channelListUpdater?.update_completion?(.success([]))
 
         // Check if state changed after successful network call.
-        XCTAssertEqual(controller.state, .remoteDataFetched)
+        AssertAsync.willBeEqual(controller.state, .remoteDataFetched)
     }
 
     func test_channelsAccess_changesControllerState() {
@@ -1014,58 +1014,11 @@ final class ChannelListController_Tests: XCTestCase {
         controller.synchronize()
 
         XCTAssert(controller.client === client)
-        XCTAssert(client.activeChannelListControllers.count == 1)
-        XCTAssert(client.activeChannelListControllers.allObjects.first === controller)
+        XCTAssert(client.syncRepository.activeChannelListControllers.count == 1)
+        XCTAssert(client.syncRepository.activeChannelListControllers.allObjects.first === controller)
     }
 
     // MARK: Predicates
-
-    private func assertFilterPredicate(
-        _ filter: @autoclosure () -> Filter<ChannelListFilterScope>,
-        channelsInDB: @escaping @autoclosure () -> [ChannelPayload],
-        expectedResult: @autoclosure () -> [ChannelId],
-        file: StaticString = #file,
-        line: UInt = #line
-    ) throws {
-        /// Ensure that isChannelAutomaticFilteringEnabled is enabled
-        var config = ChatClientConfig(apiKeyString: .unique)
-        config.isChannelAutomaticFilteringEnabled = true
-        client = ChatClient.mock(config: config)
-
-        let query = ChannelListQuery(
-            filter: filter()
-        )
-        controller = ChatChannelListController(
-            query: query,
-            client: client,
-            environment: env.environment
-        )
-        controllerCallbackQueueID = UUID()
-        controller.callbackQueue = .testQueue(withId: controllerCallbackQueueID)
-
-        // Simulate `synchronize` call
-        controller.synchronize()
-        waitForInitialChannelsUpdate()
-
-        XCTAssertEqual(controller.channels.map(\.cid), [], file: file, line: line)
-
-        // Simulate changes in the DB:
-        _ = try waitFor {
-            writeAndWaitForChannelsUpdates({ [query] session in
-                try channelsInDB().forEach { payload in
-                    try session.saveChannel(payload: payload, query: query, cache: nil)
-                }
-            }, completion: $0)
-        }
-
-        // Assert the resulting value is updated
-        XCTAssertEqual(
-            controller.channels.map(\.cid.rawValue).sorted(),
-            expectedResult().map(\.rawValue).sorted(),
-            file: file,
-            line: line
-        )
-    }
 
     func test_filterPredicate_equal_containsExpectedItems() throws {
         let cid = ChannelId.unique
@@ -1598,6 +1551,53 @@ final class ChannelListController_Tests: XCTestCase {
         )
     }
 
+    func test_filterPredicate_hasUnread_returnsExpectedResults() throws {
+        let cid1 = ChannelId.unique
+        let cid2 = ChannelId.unique
+        let currentUserId = UserId.unique
+
+        try assertFilterPredicate(
+            .hasUnread,
+            sort: [.init(key: .unreadCount, isAscending: false)],
+            currentUserId: currentUserId,
+            channelsInDB: [
+                .dummy(
+                    channel: .dummy(cid: cid1),
+                    channelReads: [
+                        .init(
+                            user: .dummy(userId: currentUserId),
+                            lastReadAt: .unique,
+                            lastReadMessageId: nil,
+                            unreadMessagesCount: 3
+                        )
+                    ]
+                ),
+                .dummy(channel: .dummy(team: .unique), channelReads: [
+                    .init(
+                        user: .dummy(userId: .unique),
+                        lastReadAt: .unique,
+                        lastReadMessageId: nil,
+                        unreadMessagesCount: 10
+                    )
+                ]),
+                .dummy(channel: .dummy(team: .unique)),
+                .dummy(channel: .dummy(team: .unique)),
+                .dummy(
+                    channel: .dummy(cid: cid2),
+                    channelReads: [
+                        .init(
+                            user: .dummy(userId: currentUserId),
+                            lastReadAt: .unique,
+                            lastReadMessageId: nil,
+                            unreadMessagesCount: 20
+                        )
+                    ]
+                )
+            ],
+            expectedResult: [cid2, cid1]
+        )
+    }
+
     func test_filterPredicate_muted_returnsExpectedResults() throws {
         let cid1 = ChannelId.unique
         let userId = memberId
@@ -1671,6 +1671,64 @@ final class ChannelListController_Tests: XCTestCase {
 
     // MARK: - Private Helpers
 
+    private func assertFilterPredicate(
+        _ filter: @autoclosure () -> Filter<ChannelListFilterScope>,
+        sort: [Sorting<ChannelListSortingKey>] = [],
+        currentUserId: UserId? = nil,
+        channelsInDB: @escaping @autoclosure () -> [ChannelPayload],
+        expectedResult: @autoclosure () -> [ChannelId],
+        file: StaticString = #file,
+        line: UInt = #line
+    ) throws {
+        /// Ensure that isChannelAutomaticFilteringEnabled is enabled
+        var config = ChatClientConfig(apiKeyString: .unique)
+        config.isChannelAutomaticFilteringEnabled = true
+        client = ChatClient.mock(config: config)
+
+        if let currentUserId {
+            try database.writeSynchronously { session in
+                try session.saveCurrentUser(
+                    payload: .dummy(userId: currentUserId, role: .admin)
+                )
+            }
+        }
+
+        let query = ChannelListQuery(
+            filter: filter(),
+            sort: sort
+        )
+        controller = ChatChannelListController(
+            query: query,
+            client: client,
+            environment: env.environment
+        )
+        controllerCallbackQueueID = UUID()
+        controller.callbackQueue = .testQueue(withId: controllerCallbackQueueID)
+
+        // Simulate `synchronize` call
+        controller.synchronize()
+        waitForInitialChannelsUpdate()
+
+        XCTAssertEqual(controller.channels.map(\.cid), [], file: file, line: line)
+
+        // Simulate changes in the DB:
+        _ = try waitFor {
+            writeAndWaitForChannelsUpdates({ [query] session in
+                try channelsInDB().forEach { payload in
+                    try session.saveChannel(payload: payload, query: query, cache: nil)
+                }
+            }, completion: $0)
+        }
+
+        // Assert the resulting value is updated
+        XCTAssertEqual(
+            controller.channels.map(\.cid.rawValue).sorted(),
+            expectedResult().map(\.rawValue).sorted(),
+            file: file,
+            line: line
+        )
+    }
+
     private func makeAddedChannelEvent(with channel: ChatChannel) -> NotificationAddedToChannelEvent {
         NotificationAddedToChannelEvent(
             channel: channel,
@@ -1736,7 +1794,6 @@ final class ChannelListController_Tests: XCTestCase {
     }
 
     private func waitForInitialChannelsUpdate(file: StaticString = #file, line: UInt = #line) {
-        guard StreamRuntimeCheck._isBackgroundMappingEnabled else { return }
         waitForChannelsUpdate {}
     }
 

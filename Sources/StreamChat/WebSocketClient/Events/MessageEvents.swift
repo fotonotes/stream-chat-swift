@@ -34,7 +34,7 @@ class MessageNewEventDTO: EventDTO {
     let message: MessagePayload
     let createdAt: Date
     let watcherCount: Int?
-    let unreadCount: UnreadCount?
+    let unreadCount: UnreadCountPayload?
     let payload: EventPayload
 
     init(from response: EventPayload) throws {
@@ -51,7 +51,8 @@ class MessageNewEventDTO: EventDTO {
         guard
             let userDTO = session.user(id: user.id),
             let messageDTO = session.message(id: message.id),
-            let channelDTO = session.channel(cid: cid)
+            let channelDTO = session.channel(cid: cid),
+            let currentUser = session.currentUser
         else { return nil }
 
         return try? MessageNewEvent(
@@ -60,7 +61,7 @@ class MessageNewEventDTO: EventDTO {
             channel: channelDTO.asModel(),
             createdAt: createdAt,
             watcherCount: watcherCount,
-            unreadCount: unreadCount
+            unreadCount: UnreadCount(currentUserDTO: currentUser)
         )
     }
 }
@@ -183,6 +184,9 @@ public struct MessageReadEvent: ChannelSpecificEvent {
     /// The read channel.
     public let channel: ChatChannel
 
+    /// The thread if a thread was read.
+    public let thread: ChatThread?
+
     /// The event timestamp.
     public let createdAt: Date
 
@@ -194,7 +198,7 @@ class MessageReadEventDTO: EventDTO {
     let user: UserPayload
     let cid: ChannelId
     let createdAt: Date
-    let unreadCount: UnreadCount?
+    let unreadCount: UnreadCountPayload?
     let payload: EventPayload
 
     init(from response: EventPayload) throws {
@@ -208,14 +212,21 @@ class MessageReadEventDTO: EventDTO {
     func toDomainEvent(session: DatabaseSession) -> Event? {
         guard
             let userDTO = session.user(id: user.id),
-            let channelDTO = session.channel(cid: cid)
+            let channelDTO = session.channel(cid: cid),
+            let currentUser = session.currentUser
         else { return nil }
+
+        var threadDTO: ThreadDTO?
+        if let threadId = payload.threadDetails?.value?.parentMessageId {
+            threadDTO = session.thread(parentMessageId: threadId, cache: nil)
+        }
 
         return try? MessageReadEvent(
             user: userDTO.asModel(),
             channel: channelDTO.asModel(),
+            thread: threadDTO?.asModel(),
             createdAt: createdAt,
-            unreadCount: unreadCount
+            unreadCount: UnreadCount(currentUserDTO: currentUser)
         )
     }
 }

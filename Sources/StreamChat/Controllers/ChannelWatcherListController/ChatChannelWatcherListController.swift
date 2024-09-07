@@ -36,7 +36,6 @@ public class ChatChannelWatcherListController: DataController, DelegateCallable,
     /// An internal backing object for all publicly available Combine publishers. We use it to simplify the way we expose
     /// publishers. Instead of creating custom `Publisher` types, we use `CurrentValueSubject` and `PassthroughSubject` internally,
     /// and expose the published values by mapping them to a read-only `AnyPublisher` type.
-    @available(iOS 13, *)
     var basePublishers: BasePublishers {
         if let value = _basePublishers as? BasePublishers {
             return value
@@ -56,12 +55,11 @@ public class ChatChannelWatcherListController: DataController, DelegateCallable,
     }
 
     /// The observer used to observe the changes in the database.
-    private lazy var watchersObserver: ListDatabaseObserverWrapper<ChatUser, UserDTO> = createWatchersObserver()
+    private lazy var watchersObserver: BackgroundListDatabaseObserver<ChatUser, UserDTO> = createWatchersObserver()
 
     /// The worker used to fetch the remote data and communicate with servers.
     private lazy var updater: ChannelUpdater = self.environment.channelUpdaterBuilder(
         client.channelRepository,
-        client.callRepository,
         client.messageRepository,
         client.makeMessagesPaginationStateHandler(),
         client.databaseContainer,
@@ -99,9 +97,8 @@ public class ChatChannelWatcherListController: DataController, DelegateCallable,
         }
     }
 
-    private func createWatchersObserver() -> ListDatabaseObserverWrapper<ChatUser, UserDTO> {
+    private func createWatchersObserver() -> BackgroundListDatabaseObserver<ChatUser, UserDTO> {
         let observer = environment.watcherListObserverBuilder(
-            StreamRuntimeCheck._isBackgroundMappingEnabled,
             client.databaseContainer,
             UserDTO.watcherFetchRequest(cid: query.cid),
             { try $0.asModel() as ChatUser },
@@ -138,7 +135,6 @@ extension ChatChannelWatcherListController {
     struct Environment {
         var channelUpdaterBuilder: (
             _ channelRepository: ChannelRepository,
-            _ callRepository: CallRepository,
             _ messageRepository: MessageRepository,
             _ paginationStateHandler: MessagesPaginationStateHandling,
             _ database: DatabaseContainer,
@@ -146,18 +142,17 @@ extension ChatChannelWatcherListController {
         ) -> ChannelUpdater = ChannelUpdater.init
 
         var watcherListObserverBuilder: (
-            _ isBackgroundMappingEnabled: Bool,
             _ database: DatabaseContainer,
             _ fetchRequest: NSFetchRequest<UserDTO>,
             _ itemCreator: @escaping (UserDTO) throws -> ChatUser,
             _ controllerType: NSFetchedResultsController<UserDTO>.Type
-        ) -> ListDatabaseObserverWrapper<ChatUser, UserDTO> = {
-            ListDatabaseObserverWrapper(
-                isBackground: $0,
-                database: $1,
-                fetchRequest: $2,
-                itemCreator: $3,
-                fetchedResultsControllerType: $4
+        ) -> BackgroundListDatabaseObserver<ChatUser, UserDTO> = {
+            BackgroundListDatabaseObserver(
+                database: $0,
+                fetchRequest: $1,
+                itemCreator: $2,
+                itemReuseKeyPaths: (\ChatUser.id, \UserDTO.id),
+                fetchedResultsControllerType: $3
             )
         }
     }

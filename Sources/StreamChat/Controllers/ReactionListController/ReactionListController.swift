@@ -60,11 +60,10 @@ public class ChatReactionListController: DataController, DelegateCallable, DataS
     }
 
     /// Used for observing the database for changes.
-    private(set) lazy var reactionListObserver: ListDatabaseObserverWrapper<ChatMessageReaction, MessageReactionDTO> = {
+    private(set) lazy var reactionListObserver: BackgroundListDatabaseObserver<ChatMessageReaction, MessageReactionDTO> = {
         let request = MessageReactionDTO.reactionListFetchRequest(query: query)
 
         let observer = self.environment.createReactionListDatabaseObserver(
-            StreamRuntimeCheck._isBackgroundMappingEnabled,
             client.databaseContainer,
             request,
             { try $0.asModel() }
@@ -88,7 +87,6 @@ public class ChatReactionListController: DataController, DelegateCallable, DataS
     /// An internal backing object for all publicly available Combine publishers. We use it to simplify the way we expose
     /// publishers. Instead of creating custom `Publisher` types, we use `CurrentValueSubject` and `PassthroughSubject` internally,
     /// and expose the published values by mapping them to a read-only `AnyPublisher` type.
-    @available(iOS 13, *)
     var basePublishers: BasePublishers {
         if let value = _basePublishers as? BasePublishers {
             return value
@@ -166,13 +164,17 @@ extension ChatReactionListController {
         ) -> ReactionListUpdater = ReactionListUpdater.init
 
         var createReactionListDatabaseObserver: (
-            _ isBackgroundMappingEnabled: Bool,
             _ database: DatabaseContainer,
             _ fetchRequest: NSFetchRequest<MessageReactionDTO>,
             _ itemCreator: @escaping (MessageReactionDTO) throws -> ChatMessageReaction
         )
-            -> ListDatabaseObserverWrapper<ChatMessageReaction, MessageReactionDTO> = {
-                ListDatabaseObserverWrapper(isBackground: $0, database: $1, fetchRequest: $2, itemCreator: $3)
+            -> BackgroundListDatabaseObserver<ChatMessageReaction, MessageReactionDTO> = {
+                BackgroundListDatabaseObserver(
+                    database: $0,
+                    fetchRequest: $1,
+                    itemCreator: $2,
+                    itemReuseKeyPaths: (\ChatMessageReaction.id, \MessageReactionDTO.id)
+                )
             }
     }
 }

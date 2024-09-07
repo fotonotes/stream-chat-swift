@@ -4,16 +4,16 @@
 
 import Foundation
 
-@available(iOS 13.0, *)
 extension ReactionListState {
     struct Observer {
         private let reactionListObserver: StateLayerDatabaseObserver<ListResult, ChatMessageReaction, MessageReactionDTO>
         
         init(query: ReactionListQuery, database: DatabaseContainer) {
             reactionListObserver = StateLayerDatabaseObserver(
-                databaseContainer: database,
+                database: database,
                 fetchRequest: MessageReactionDTO.reactionListFetchRequest(query: query),
-                itemCreator: { try $0.asModel() }
+                itemCreator: { try $0.asModel() },
+                itemReuseKeyPaths: (\ChatMessageReaction.id, \MessageReactionDTO.id)
             )
         }
         

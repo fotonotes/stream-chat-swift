@@ -6,14 +6,15 @@ require 'net/http'
 import 'Sonarfile'
 import 'Allurefile'
 
-xcode_version = ENV['XCODE_VERSION'] || '15.2'
+xcode_version = ENV['XCODE_VERSION'] || '15.4'
 xcode_project = 'StreamChat.xcodeproj'
 sdk_names = ['StreamChat', 'StreamChatUI']
 github_repo = ENV['GITHUB_REPOSITORY'] || 'GetStream/stream-chat-swift'
 stress_tests_cycles = 50
 derived_data_path = 'derived_data'
 source_packages_path = 'spm_cache'
-performance_path = "performance/#{github_repo.split('/').last}.json"
+metrics_git = 'git@github.com:GetStream/stream-internal-metrics.git'
+xcmetrics_path = "metrics/#{github_repo.split('/').last}-xcmetrics.json"
 buildcache_xcargs = 'CC=clang CPLUSPLUS=clang++ LD=clang LDPLUSPLUS=clang++'
 testlab_bucket = 'gs://test-lab-af3rt9m4yh360-mqm1zzm767nhc'
 is_localhost = !is_ci
@@ -22,8 +23,7 @@ is_localhost = !is_ci
 before_all do |lane|
   if is_ci
     setup_ci
-    ENV['FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT'] = '180'
-    ENV['FASTLANE_XCODEBUILD_SETTINGS_RETRIES'] = '10'
+    setup_git_config
     xcversion(version: xcode_version) unless [:publish_release, :allure_launch, :allure_upload, :pod_lint, :sync_mock_server, :copyright].include?(lane)
   end
 end
@@ -105,32 +105,56 @@ lane :publish_release do |options|
   )
 
   update_spm(version: options[:version])
+
+  merge_main_to_develop
 end
 
-lane :merge_release_to_main do
+lane :merge_release_to_main do |options|
   ensure_git_status_clean
-  sh('git checkout main')
-  sh('git pull')
 
-  # Grep all remote release branches and ensure there's only one
-  release_branches = sh(command: 'git branch -a', log: false).delete(' ').split("\n").grep(%r(origin/.*release/))
-  UI.user_error!("Expected 1 release branch, found #{release_branches.size}") if release_branches.size != 1
+  release_branch =
+    if is_ci
+      # This API operation needs the "admin:org" scope.
+      ios_team = sh('gh api orgs/GetStream/teams/ios-developers/members -q ".[].login"', log: false).split
+      UI.user_error!("#{options[:author]} is not a member of the iOS Team") unless ios_team.include?(options[:author])
+
+      current_branch
+    else
+      release_branches = sh(command: 'git branch -a', log: false).delete(' ').split("\n").grep(%r(origin/.*release/))
+      UI.user_error!("Expected 1 release branch, found #{release_branches.size}") if release_branches.size != 1
+
+      release_branches.first
+    end
+
+  UI.user_error!("`#{release_branch}`` branch does not match the release branch pattern: `release/*`") unless release_branch.start_with?('release/')
+
+  sh('git config pull.ff only')
+  sh('git fetch --all --tags --prune')
+  sh("git checkout #{release_branch}")
+  sh("git pull origin #{release_branch} --ff-only")
+  sh('git checkout main')
+  sh('git pull origin main --ff-only')
 
   # Merge release branch to main. For more info, read: https://notion.so/iOS-Branching-Strategy-37c10127dc26493e937769d44b1d6d9a
-  sh("git merge #{release_branches.first} --ff-only")
-  UI.user_error!('Not pushing changes') unless prompt(text: 'Will push changes. All looking good?', boolean: true)
-  sh('git push')
-  UI.important('Please, wait for the `Publish new release` workflow to pass on GitHub Actions: ' \
-               "https://github.com/#{github_repo}/actions/workflows/publish-release.yml")
+  sh("git merge #{release_branch} --ff-only")
+  sh('git push origin main')
+
+  comment = "[Publication of the release](https://github.com/#{github_repo}/actions/workflows/release-publish.yml) has been launched 👍"
+  UI.important(comment)
+  pr_comment(text: comment)
 end
 
 lane :merge_main_to_develop do
   ensure_git_status_clean
-  sh('git checkout main && git pull')
-  sh('git checkout develop && git pull')
+  sh('git config pull.ff only')
+  sh('git fetch --all --tags --prune')
+  sh('git checkout main')
+  sh('git pull origin main --ff-only')
+  sh('git checkout develop')
+  sh('git pull origin develop --ff-only')
+  sh('git log develop..main')
   sh('git merge main')
-  UI.user_error!('Not pushing changes') unless prompt(text: 'Will push changes. All looking good?', boolean: true)
-  sh('git push')
+  sh('git push origin develop')
 end
 
 desc 'Compresses the XCFrameworks into zip files'
@@ -138,7 +162,7 @@ lane :compress_frameworks do
   Dir.chdir('..') do
     FileUtils.cp('LICENSE', 'Products/LICENSE')
     Dir.chdir('Products') do
-      ['StreamChat', 'StreamChatUI'].each do |framework|
+      sdk_names.each do |framework|
         sh("zip -r #{framework} ./#{framework}.xcframework ./LICENSE")
         sh("swift package compute-checksum #{framework}.zip")
       end
@@ -317,7 +341,7 @@ lane :test do |options|
 
   update_testplan_on_ci(path: 'Tests/StreamChatTests/StreamChatTestPlan.xctestplan')
 
-  scan(
+  scan_options = {
     project: xcode_project,
     scheme: 'StreamChat',
     testplan: 'StreamChatTestPlan',
@@ -327,7 +351,17 @@ lane :test do |options|
     skip_build: true,
     xcargs: buildcache_xcargs,
     number_of_retries: options[:cron] ? 3 : nil
-  )
+  }
+
+  begin
+    scan(scan_options)
+  rescue StandardError => e
+    UI.user_error!(e) unless options[:cron]
+
+    failed_tests = retreive_failed_tests
+    UI.important("Re-running #{failed_tests.size} failed tests ⌛️")
+    scan(scan_options.merge(only_testing: failed_tests))
+  end
 end
 
 desc 'Starts Sinatra web server'
@@ -357,7 +391,7 @@ end
 lane :xcmetrics do |options|
   next unless is_check_required(sources: sources_matrix[:xcmetrics], force_check: @force_check)
 
-  ['test_output/', 'performance/', "../#{derived_data_path}/Build/Products"].each { |dir| FileUtils.remove_dir(dir, force: true) }
+  ['test_output/', 'metrics/', "../#{derived_data_path}/Build/Products"].each { |dir| FileUtils.remove_dir(dir, force: true) }
 
   match_me
 
@@ -390,32 +424,55 @@ lane :xcmetrics do |options|
     xcodebuild_output = File.read('xcodebuild_output.log')
   end
 
-  sh("git clone git@github.com:GetStream/stream-swift-performance-benchmarks.git #{File.dirname(performance_path)}")
-  branch_performance = xcmetrics_log_parser(log: xcodebuild_output)
-  performance_benchmarks = JSON.parse(File.read(performance_path))
-  expected_performance = performance_benchmarks['benchmark']
+  warning_status = '🟡' # Warning if a branch is #{max_tolerance} less performant than the benchmark
+  fail_status = '🔴' # Failure if a branch is more than #{max_tolerance} less performant than the benchmark
+  success_status = '🟢' # Success if a branch is more performant or equals to the benchmark
 
-  markdown_table = "## StreamChat XCMetrics\n| `target` | `metric` | `benchmark` | `branch` | `performance` | `status` |\n| - | - | - | - | - | - |\n"
+  sh("git clone #{metrics_git} #{File.dirname(xcmetrics_path)}")
+  performance_benchmarks = JSON.parse(File.read(xcmetrics_path))
+  expected_performance = performance_benchmarks['benchmark']
+  actual_performance = xcmetrics_log_parser(log: xcodebuild_output)
+
+  table_header = '## SDK Performance'
+  markdown_table = "#{table_header}\n| `target` | `metric` | `benchmark` | `branch` | `performance` | `status` |\n| - | - | - | - | - | - |\n"
   ['testMessageListScrollTime', 'testChannelListScrollTime'].each do |test_name|
     index = 0
     ['hitches_total_duration', 'duration', 'hitch_time_ratio', 'frame_rate', 'number_of_hitches'].each do |metric|
+      is_frame_rate = metric == 'frame_rate'
       benchmark_value = expected_performance[test_name][metric]['value']
-      branch_value = branch_performance[test_name][metric]['value']
-      value_extension = branch_performance[test_name][metric]['ext']
-
-      max_stddev = 0.1 # Default Xcode Max STDDEV is 10%
-      status_emoji =
-        if branch_value > benchmark_value && branch_value < benchmark_value + (benchmark_value * max_stddev)
-          '🟡' # Warning if a branch is 10% less performant than the benchmark
-        elsif branch_value > benchmark_value
-          '🔴' # Failure if a branch is more than 10% less performant than the benchmark
-        else
-          '🟢' # Success if a branch is more performant or equals to the benchmark
-        end
+      branch_value = actual_performance[test_name][metric]['value']
+      value_extension = actual_performance[test_name][metric]['ext']
+      max_tolerance = benchmark_value * 0.1 # Default Xcode Max Tolerance is 10%
 
       benchmark_value_avoids_zero_division = benchmark_value == 0 ? 1 : benchmark_value
-      diff = ((benchmark_value - branch_value) * 100.0 / benchmark_value_avoids_zero_division).round(2)
-      diff_emoji = diff > 0 ? '🔼' : '🔽'
+      diff = is_frame_rate ? branch_value - benchmark_value : benchmark_value - branch_value
+      diff = (diff * 100.0 / benchmark_value_avoids_zero_division).round(2)
+      diff_emoji = if diff > 0
+                     '🔼'
+                   elsif diff.zero?
+                     '🟰'
+                   else
+                     '🔽'
+                   end
+
+      status_emoji =
+        if is_frame_rate
+          if branch_value < benchmark_value && branch_value > benchmark_value - max_tolerance
+            warning_status
+          elsif branch_value < benchmark_value
+            fail_status
+          else
+            success_status
+          end
+        else
+          if branch_value > benchmark_value && branch_value < benchmark_value + max_tolerance
+            warning_status
+          elsif branch_value > benchmark_value
+            fail_status
+          else
+            success_status
+          end
+        end
 
       title = metric.to_s.gsub('_', ' ').capitalize
       target = index.zero? ? test_name.match(/(?<=test)(.*?)(?=ScrollTime)/).to_s : ''
@@ -423,7 +480,7 @@ lane :xcmetrics do |options|
 
       markdown_table << "| #{target} | #{title} | #{benchmark_value} #{value_extension} | #{branch_value} #{value_extension} | #{diff}% #{diff_emoji} | #{status_emoji} |\n"
       FastlaneCore::PrintTable.print_values(
-        title: "⏳ #{title} ⏳",
+        title: title,
         config: {
           benchmark: "#{benchmark_value} #{value_extension}",
           branch: "#{branch_value} #{value_extension}",
@@ -436,27 +493,9 @@ lane :xcmetrics do |options|
 
   UI.user_error!("See Firebase error above ☝️") unless firebase_error.to_s.empty?
 
-  if is_ci
-    pr_comment_required = !ENV['GITHUB_PR_NUM'].to_s.empty?
-    performance_benchmarks[current_branch] = branch_performance
-    UI.message("Performance benchmarks: #{performance_benchmarks}")
-    File.write(performance_path, JSON.pretty_generate(performance_benchmarks))
+  pr_comment(text: markdown_table, edit_last_comment_with_text: table_header) if is_ci
 
-    Dir.chdir(File.dirname(performance_path)) do
-      if sh('git status -s', log: false).to_s.empty?
-        pr_comment_required = false
-        UI.important('No changes in performance benchmarks. Skipping commit and comment.')
-      else
-        sh('git add -A')
-        sh("git commit -m 'Update #{github_repo.split('/').last}.json: #{current_branch}'")
-        sh('git push')
-      end
-    end
-
-    sh("gh pr comment #{ENV.fetch('GITHUB_PR_NUM')} -b '#{markdown_table}'") if pr_comment_required
-  end
-
-  UI.user_error!('Performance benchmark failed.') if markdown_table.include?('🔴')
+  UI.user_error!("#{table_header} benchmark failed.") if markdown_table.include?(fail_status)
 end
 
 private_lane :xcmetrics_log_parser do |options|
@@ -525,13 +564,13 @@ lane :test_e2e_mock do |options|
     xcargs: buildcache_xcargs,
     devices: options[:device],
     prelaunch_simulator: is_ci,
-    number_of_retries: 3 # TODO: CIS-1737
+    number_of_retries: 3
   }
 
-  if is_localhost || options[:cron]
+  if is_localhost
     scan(scan_options)
   else
-    parallelize_tests_on_ci(scan: scan_options, batch: options[:batch])
+    parallelize_tests_on_ci(scan: scan_options, batch: options[:batch], cron: options[:cron])
   end
 end
 
@@ -539,13 +578,41 @@ private_lane :parallelize_tests_on_ci do |options|
   products_dir = File.expand_path("../#{derived_data_path}/Build/Products")
   xctestrun = Dir.glob(File.expand_path("#{products_dir}/*.xctestrun")).first
   tests = retrieve_xctest_names(xctestrun: xctestrun).values.flatten
-  slice_size = (tests.size / ENV['MATRIX_SIZE'].to_f).ceil
+  slice_size = options[:cron] ? tests.size : (tests.size / ENV['MATRIX_SIZE'].to_f).ceil
   only_testing = []
   tests.each_slice(slice_size) { |test| only_testing << test }
   only_testing_batch = only_testing[options[:batch].to_i]
 
-  UI.success("Tests in total: #{only_testing.flatten.size}. Running #{only_testing_batch.size} of them ⌛️")
-  scan(options[:scan].merge(only_testing: only_testing_batch))
+  begin
+    UI.success("Tests in total: #{only_testing.flatten.size}. Running #{only_testing_batch.size} of them ⌛️")
+    scan(options[:scan].merge(only_testing: only_testing_batch))
+  rescue StandardError
+    failed_tests = retreive_failed_tests
+    UI.important("Re-running #{failed_tests.size} failed tests ⌛️")
+    scan(options[:scan].merge(only_testing: failed_tests))
+  end
+end
+
+private_lane :retreive_failed_tests do
+  report_path = 'test_output/report.junit'
+  raise UI.user_error!('There is no junit report to parse') unless File.file?(report_path)
+
+  junit_report = Nokogiri::XML(File.read(report_path))
+  failed_tests = []
+  passed_tests = []
+  suite_name = junit_report.xpath('//testsuite').first['name'].split('.').first
+  junit_report.xpath('//testcase').each do |testcase|
+    class_name = testcase['classname'].split('.').last
+    test_name = testcase['name'].delete('()')
+
+    if testcase.at_xpath('failure')
+      failed_tests << "#{suite_name}/#{class_name}/#{test_name}"
+    else
+      passed_tests << "#{suite_name}/#{class_name}/#{test_name}"
+    end
+  end
+
+  (failed_tests - passed_tests).uniq
 end
 
 desc 'Runs ui tests in Debug config'
@@ -580,7 +647,7 @@ lane :test_ui do |options|
     png_files.each { |png| sh("git add #{png}") || true }
     sh('git restore .')
 
-    create_pr(
+    pr_create(
       title: '[CI] Snapshots',
       base_branch: current_branch,
       head_branch: "#{current_branch}-snapshots"
@@ -714,7 +781,7 @@ lane :sync_mock_server do
   sh('python3 sync_mock_server.py')
   next unless is_ci
 
-  create_pr(
+  pr_create(
     title: '[CI] Sync Mock Server',
     head_branch: "ci/sync-mock-server-#{Time.now.to_i}"
   )
@@ -727,18 +794,8 @@ lane :rubocop do
   sh('bundle exec rubocop')
 end
 
-lane :install_sim do |options|
-  xcode_install_cache_dir = File.expand_path('~/Library/Caches/XcodeInstall')
-  sim_dmg_path = Dir["#{xcode_install_cache_dir}/*.dmg"].first
-  sim_pkg_path = Dir["#{xcode_install_cache_dir}/*.pkg"].first
-  if is_localhost || sim_dmg_path.nil? || sim_pkg_path.nil?
-    sh("bundle exec xcversion simulators --install='iOS #{options[:ios]}'")
-  else
-    sh("hdiutil attach '#{sim_dmg_path}'")
-    sh("sudo installer -pkg '#{sim_pkg_path}' -target /")
-    mount_point = sh("hdiutil attach '#{sim_dmg_path}' | grep Volumes | cut -f 3").strip
-    sh("hdiutil detach '#{mount_point}'")
-  end
+lane :install_runtime do |options|
+  install_ios_runtime(version: options[:ios], custom_script: 'Scripts/install_ios_runtime.sh')
 end
 
 desc 'Remove UI snapshots'
@@ -761,6 +818,7 @@ lane :sources_matrix do
     sample_apps: ['Sources', 'Examples', 'DemoApp', xcode_project],
     integration: ['Sources', 'Integration', xcode_project],
     ruby: ['fastlane', 'Gemfile', 'Gemfile.lock'],
+    size: ['Sources', xcode_project],
     xcmetrics: ['Sources']
   }
 end
@@ -769,107 +827,26 @@ lane :copyright do
   update_copyright(ignore: [derived_data_path, source_packages_path, 'vendor/'])
   next unless is_ci
 
-  create_pr(
+  pr_create(
     title: '[CI] Update Copyright',
     head_branch: "ci/update-copyright-#{Time.now.to_i}"
   )
 end
 
-desc 'Show current frameworks size'
 lane :show_frameworks_sizes do |options|
-  options[:sizes] ||= frameworks_sizes
+  next unless is_check_required(sources: sources_matrix[:size], force_check: @force_check)
 
-  UI.success("StreamChat: #{options[:sizes][:stream_chat]}MB")
-  UI.success("StreamChatUI: #{options[:sizes][:stream_chat_ui]}MB")
-  UI.success("Total Size: #{options[:sizes][:total]}MB")
+  sizes = options[:sizes] || frameworks_sizes
+  show_sdk_size(branch_sizes: sizes, github_repo: github_repo)
+  update_img_shields_sdk_sizes(sizes: sizes, open_pr: options[:open_pr]) if options[:update_readme]
 end
 
-desc 'Update img shields SDK size labels'
-lane :update_img_shields_sdk_sizes do
-  sizes = frameworks_sizes
-  show_frameworks_sizes(sizes: sizes)
-
-  # Read the file into a string
-  readme_path = '../README.md'
-  readme_content = File.read(readme_path)
-
-  # Define the new value for the badge
-  stream_chat_size = "#{sizes[:stream_chat]}MB"
-  stream_chat_ui_size = "#{sizes[:stream_chat_ui]}MB"
-
-  # Replace the value in the badge URL
-  readme_content.gsub!(%r{(https://img.shields.io/badge/StreamChat-)(.*?)(-blue)}, "\\1#{stream_chat_size}\\3")
-  readme_content.gsub!(%r{(https://img.shields.io/badge/StreamChatUI-)(.*?)(-blue)}, "\\1#{stream_chat_ui_size}\\3")
-
-  # Write the updated content back to the file
-  File.write(readme_path, readme_content)
-
-  # Notify success
-  UI.success('Successfully updated the SDK size labels in README.md!')
-end
-
-private_lane :create_pr do |options|
-  options[:base_branch] ||= 'develop'
-  sh("git checkout -b #{options[:head_branch]}")
-  sh('git restore Brewfile.lock.json || true')
-  sh('git add -A')
-  sh("git commit -m '#{options[:title]}'")
-  push_to_git_remote(tags: false)
-
-  create_pull_request(
-    api_token: ENV.fetch('GITHUB_TOKEN', nil),
-    repo: github_repo,
-    title: options[:title],
-    head: options[:head_branch],
-    base: options[:base_branch],
-    body: 'This PR was created automatically by CI.'
+lane :update_img_shields_sdk_sizes do |options|
+  update_sdk_size_in_readme(
+    open_pr: options[:open_pr] || false,
+    readme_path: 'README.md',
+    sizes: options[:sizes] || frameworks_sizes
   )
-end
-
-private_lane :current_branch do
-  github_pr_branch_name = ENV['BRANCH_NAME'].to_s
-  github_ref_branch_name = ENV['GITHUB_REF'].to_s.sub('refs/heads/', '')
-  fastlane_branch_name = git_branch
-
-  branch_name = if !github_pr_branch_name.empty?
-                  github_pr_branch_name
-                elsif !fastlane_branch_name.empty?
-                  fastlane_branch_name
-                elsif !github_ref_branch_name.empty?
-                  github_ref_branch_name
-                end
-
-  UI.important("Current branch: #{branch_name} 🕊️")
-  branch_name
-end
-
-private_lane :git_status do |options|
-  UI.user_error!('Extension should be provided') unless options[:ext]
-
-  untracked_files = sh('git status -s', log: false).split("\n").map(&:strip)
-  UI.important("Git Status: #{untracked_files}")
-
-  deleted_files = select_files_from(files: untracked_files, with_extension: options[:ext], that_start_with: 'D')
-  added_files = select_files_from(files: untracked_files, with_extension: options[:ext], that_start_with: ['A', '??'])
-  renamed_files = select_files_from(files: untracked_files, with_extension: options[:ext], that_start_with: 'R')
-  modified_files = select_files_from(files: untracked_files, with_extension: options[:ext], that_start_with: 'M')
-
-  renamed_files.each do |renamed_file|
-    content = renamed_file.split.drop(1).join.split('->').map(&:strip)
-    deleted_files << content.first
-    added_files << content.last
-  end
-  { a: added_files, d: deleted_files, m: modified_files }
-end
-
-def select_files_from(files:, with_extension:, that_start_with:)
-  files.select do |f|
-    f.start_with?(*that_start_with)
-  end.map do |f|
-    f.split.drop(1).join(' ')
-  end.select do |f|
-    f.gsub(/['"]/, '').end_with?(with_extension)
-  end
 end
 
 def frameworks_sizes
@@ -878,6 +855,8 @@ def frameworks_sizes
 
   # Cleanup the previous builds
   FileUtils.rm_rf("../#{root_dir}/")
+
+  match_me
 
   gym(
     scheme: 'DemoApp',
@@ -896,13 +875,11 @@ def frameworks_sizes
   stream_chat_size = File.size("#{frameworks_path}/StreamChat.framework/StreamChat")
   stream_chat_ui_size = File.size("#{frameworks_path}/StreamChatUI.framework/StreamChatUI")
 
-  stream_chat_size_mb = (stream_chat_size.to_f / 1024 / 1024).round(1)
-  stream_chat_ui_size_mb = ((stream_chat_ui_size + assets_thinned_size).to_f / 1024 / 1024).round(1)
-  total_size_mb = (stream_chat_size_mb + stream_chat_ui_size_mb).round(1)
+  stream_chat_size_kb = stream_chat_size / 1024.0
+  stream_chat_ui_size_kb = (stream_chat_ui_size + assets_thinned_size) / 1024.0
 
   {
-    stream_chat: stream_chat_size_mb,
-    stream_chat_ui: stream_chat_ui_size_mb,
-    total: total_size_mb
+    StreamChat: stream_chat_size_kb.round(0),
+    StreamChatUI: stream_chat_ui_size_kb.round(0)
   }
 end

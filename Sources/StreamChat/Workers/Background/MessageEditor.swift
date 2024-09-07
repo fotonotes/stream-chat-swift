@@ -21,18 +21,15 @@ import Foundation
 class MessageEditor: Worker {
     @Atomic private var pendingMessageIDs: Set<MessageId> = []
 
-    private let observer: ListDatabaseObserver<MessageDTO, MessageDTO>
+    private let observer: StateLayerDatabaseObserver<ListResult, MessageDTO, MessageDTO>
     private let messageRepository: MessageRepository
-    
-    // Any because CheckedContinuation<Void, Error> requires iOS 13
-    private var continuations = [MessageId: Any]()
+    private var continuations = [MessageId: CheckedContinuation<ChatMessage, Error>]()
     private let continuationsQueue = DispatchQueue(label: "co.getStream.ChatClient.MessageEditor")
 
     init(messageRepository: MessageRepository, database: DatabaseContainer, apiClient: APIClient) {
-        observer = .init(
+        observer = StateLayerDatabaseObserver(
             context: database.backgroundReadOnlyContext,
-            fetchRequest: MessageDTO.messagesPendingSyncFetchRequest(),
-            itemCreator: { $0 }
+            fetchRequest: MessageDTO.messagesPendingSyncFetchRequest()
         )
         self.messageRepository = messageRepository
         super.init(database: database, apiClient: apiClient)
@@ -44,8 +41,9 @@ class MessageEditor: Worker {
 
     private func startObserving() {
         do {
-            try observer.startObserving()
-            observer.onChange = { [weak self] in self?.handleChanges(changes: $0) }
+            try observer.startObserving(onContextDidChange: { [weak self] _, changes in
+                self?.handleChanges(changes: changes)
+            })
             let changes = observer.items.map { ListChange.insert($0, index: .init(item: 0, section: 0)) }
             handleChanges(changes: changes)
         } catch {
@@ -102,9 +100,7 @@ class MessageEditor: Worker {
 
     private func removeMessageIDAndContinue(_ messageId: MessageId, result: Result<ChatMessage, Error>) {
         _pendingMessageIDs.mutate { $0.remove(messageId) }
-        if #available(iOS 13.0, *) {
-            notifyAPIRequestFinished(for: messageId, result: result)
-        }
+        notifyAPIRequestFinished(for: messageId, result: result)
         processNextMessage()
     }
 }
@@ -124,7 +120,6 @@ private extension Array where Element == ListChange<MessageDTO> {
 
 // MARK: - Chat State Layer
 
-@available(iOS 13.0, *)
 extension MessageEditor {
     func waitForAPIRequest(messageId: MessageId) async throws -> ChatMessage {
         try await withCheckedThrowingContinuation { continuation in
@@ -146,7 +141,7 @@ extension MessageEditor {
         result: Result<ChatMessage, Error>
     ) {
         continuationsQueue.async {
-            guard let continuation = self.continuations.removeValue(forKey: messageId) as? CheckedContinuation<ChatMessage, Error> else { return }
+            guard let continuation = self.continuations.removeValue(forKey: messageId) else { return }
             continuation.resume(with: result)
         }
     }

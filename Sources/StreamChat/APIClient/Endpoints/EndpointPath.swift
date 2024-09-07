@@ -13,9 +13,12 @@ enum EndpointPath: Codable {
     case search
     case devices
     case og
+    case unread
 
     case threads
-    case thread(messageId: String)
+    case thread(messageId: MessageId)
+    case markThreadRead(cid: ChannelId)
+    case markThreadUnread(cid: ChannelId)
 
     case channels
     case createChannel(String)
@@ -50,6 +53,8 @@ enum EndpointPath: Codable {
     case flagUser(Bool)
     case flagMessage(Bool)
     case muteUser(Bool)
+    case blockUser
+    case unblockUser
 
     case callToken(String)
     case createCall(String)
@@ -78,9 +83,16 @@ enum EndpointPath: Codable {
         case .search: return "search"
         case .devices: return "devices"
         case .og: return "og"
+        case .unread: return "unread"
 
-        case .threads: return "threads"
-        case let .thread(messageId): return "threads/\(messageId)"
+        case .threads:
+            return "threads"
+        case let .thread(threadId):
+            return "threads/\(threadId)"
+        case let .markThreadRead(cid):
+            return "channels/\(cid.apiPath)/read"
+        case let .markThreadUnread(cid):
+            return "channels/\(cid.apiPath)/unread"
 
         case .channels: return "channels"
         case let .createChannel(queryString): return "channels/\(queryString)/query"
@@ -115,6 +127,8 @@ enum EndpointPath: Codable {
         case let .flagUser(flag): return "moderation/\(flag ? "flag" : "unflag")"
         case let .flagMessage(flag): return "moderation/\(flag ? "flag" : "unflag")"
         case let .muteUser(mute): return "moderation/\(mute ? "mute" : "unmute")"
+        case .blockUser: return "users/block"
+        case .unblockUser: return "users/unblock"
         case let .callToken(callId): return "calls/\(callId)"
         case let .createCall(queryString): return "channels/\(queryString)/call"
         case let .deleteFile(channelId): return "channels/\(channelId)/file"
@@ -126,7 +140,7 @@ enum EndpointPath: Codable {
         case let .pollOption(pollId: pollId, optionId: optionId): return "polls/\(pollId)/options/\(optionId)"
         case let .pollOptions(pollId: pollId): return "polls/\(pollId)/options"
         case let .pollVoteInMessage(messageId: messageId, pollId: pollId): return "messages/\(messageId)/polls/\(pollId)/vote"
-        case let .pollVote(messageId: messageId, pollId: pollId, voteId: voteId): return "messages/\(messageId)/polls/\(pollId)/\(voteId)"
+        case let .pollVote(messageId: messageId, pollId: pollId, voteId: voteId): return "messages/\(messageId)/polls/\(pollId)/vote/\(voteId)"
         case let .pollVotes(pollId: pollId): return "polls/\(pollId)/votes"
         }
     }

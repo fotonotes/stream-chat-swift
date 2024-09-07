@@ -5,7 +5,6 @@
 import Foundation
 
 /// An object which represents the currently logged in user.
-@available(iOS 13.0, *)
 public final class ConnectedUser {
     private let authenticationRepository: AuthenticationRepository
     private let currentUserUpdater: CurrentUserUpdater
@@ -39,23 +38,29 @@ public final class ConnectedUser {
     
     /// Updates the currently logged-in user's data.
     ///
-    /// - Note: Setting any arguments to nil will keep the existing value.
+    /// - Note: This does partial update and only updates existing data when a non-nil value is specified.
     ///
     /// - Parameters:
     ///   - name: The name to be set to the user.
     ///   - imageURL: The URL of the avatar image.
+    ///   - privacySettings: The privacy settings of the user. Example: If the user does not want to expose typing events or read events.
+    ///   - role: The role for the user.
     ///   - extraData: Additional data associated with the user.
     ///
     /// - Throws: An error while communicating with the Stream API or when user is not logged in.
     public func update(
         name: String? = nil,
         imageURL: URL? = nil,
+        privacySettings: UserPrivacySettings? = nil,
+        role: UserRole? = nil,
         extraData: [String: RawJSON] = [:]
     ) async throws {
         try await currentUserUpdater.updateUserData(
             currentUserId: try currentUserId(),
             name: name,
             imageURL: imageURL,
+            privacySettings: privacySettings,
+            role: role,
             userExtraData: extraData
         )
     }
@@ -127,6 +132,32 @@ public final class ConnectedUser {
         try await userUpdater.unmuteUser(userId)
     }
     
+    /// Blocks the user in all the channels.
+    ///
+    /// - Parameter userId: The id of the user to mute.
+    ///
+    /// - Throws: An error while communicating with the Stream API.
+    public func blockUser(_ userId: UserId) async throws {
+        try await userUpdater.blockUser(userId)
+    }
+    
+    /// Unblocks the user in all the channels.
+    ///
+    /// - Parameter userId: The id of the user to unmute.
+    ///
+    /// - Throws: An error while communicating with the Stream API.
+    public func unblockUser(_ userId: UserId) async throws {
+        try await userUpdater.unblockUser(userId)
+    }
+    
+    /// Get all blocked users.
+    ///
+    /// - Parameter completion: Called when the API call is finished. Called with `Error` if the remote update fails.
+    ///
+    public func loadBlockedUsers() async throws -> [BlockedUserDetails] {
+        try await currentUserUpdater.loadBlockedUsers()
+    }
+    
     /// Flags the specified user.
     ///
     /// - Parameter userId: The id of the user to flag.
@@ -153,7 +184,6 @@ public final class ConnectedUser {
     }
 }
 
-@available(iOS 13.0, *)
 extension ConnectedUser {
     struct Environment {
         var stateBuilder: @MainActor(

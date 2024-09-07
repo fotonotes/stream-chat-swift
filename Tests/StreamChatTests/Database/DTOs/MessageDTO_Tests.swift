@@ -259,8 +259,7 @@ final class MessageDTO_Tests: XCTestCase {
         let exp = expectation(description: "FRC should not report any changes")
         exp.isInverted = true
         var changes: [ListChange<ChatMessage>] = []
-        let observer = try createMessagesFRC(for: channelPayload)
-        observer.onDidChange = { newChanges in
+        let observer = try createMessagesFRC(for: channelPayload) { newChanges in
             changes += newChanges
             exp.fulfill()
         }
@@ -278,6 +277,7 @@ final class MessageDTO_Tests: XCTestCase {
         }
 
         waitForExpectations(timeout: defaultTimeout)
+        XCTAssertEqual(1, observer.items.count)
     }
 
     func test_saveMessage_whenMessageNotInParentReplies_shouldReportChangesInFRC() throws {
@@ -319,8 +319,7 @@ final class MessageDTO_Tests: XCTestCase {
 
         let exp = expectation(description: "FRC should report changes")
         var changes: [ListChange<ChatMessage>] = []
-        let observer = try createMessagesFRC(for: channelPayload)
-        observer.onDidChange = { newChanges in
+        let observer = try createMessagesFRC(for: channelPayload) { newChanges in
             changes += newChanges
             exp.fulfill()
         }
@@ -342,6 +341,7 @@ final class MessageDTO_Tests: XCTestCase {
         let parentMessage = try XCTUnwrap(database.viewContext.message(id: parentId))
         XCTAssertEqual(parentMessage.replies.count, 2)
         XCTAssertEqual(changes.count, 1)
+        XCTAssertEqual(1, observer.items.count)
     }
 
     // This is required because FRC can report a deletion when inserting a message which already exists
@@ -385,8 +385,7 @@ final class MessageDTO_Tests: XCTestCase {
 
         let exp = expectation(description: "FRC should not report changes for quoted message")
         var changes: [ListChange<ChatMessage>] = []
-        let observer = try createMessagesFRC(for: channelPayload)
-        observer.onDidChange = { newChanges in
+        let observer = try createMessagesFRC(for: channelPayload) { newChanges in
             changes += newChanges
             exp.fulfill()
         }
@@ -407,6 +406,7 @@ final class MessageDTO_Tests: XCTestCase {
 
         XCTAssertEqual(changes.count, 1)
         XCTAssertNil(changes.first { $0.item.id == quotedMessageId })
+        XCTAssertEqual(2, observer.items.count)
     }
 
     func test_saveMessage_whenQuotedMessageDoesNotExist_shouldReportChangesForQuotedMessageInFRC() throws {
@@ -431,8 +431,7 @@ final class MessageDTO_Tests: XCTestCase {
 
         let exp = expectation(description: "FRC should report changes for quoted message")
         var changes: [ListChange<ChatMessage>] = []
-        let observer = try createMessagesFRC(for: channelPayload)
-        observer.onDidChange = { newChanges in
+        let observer = try createMessagesFRC(for: channelPayload) { newChanges in
             changes += newChanges
             exp.fulfill()
         }
@@ -453,6 +452,7 @@ final class MessageDTO_Tests: XCTestCase {
 
         XCTAssertEqual(changes.count, 2)
         XCTAssertNotNil(changes.first { $0.item.id == quotedMessageId })
+        XCTAssertEqual(2, observer.items.count)
     }
 
     func test_numberOfReads() {
@@ -631,7 +631,7 @@ final class MessageDTO_Tests: XCTestCase {
         XCTAssertEqual(messagePayload.isShadowed, loadedMessage?.isShadowed)
         XCTAssertEqual(
             Set(messagePayload.attachmentIDs(cid: channelId)),
-            loadedMessage.flatMap { Set($0.attachments.map(\.attachmentID)) }
+            loadedMessage.flatMap { Set($0.attachments.compactMap(\.attachmentID)) }
         )
         XCTAssertEqual(messagePayload.translations?.mapKeys(\.languageCode), loadedMessage?.translations)
         XCTAssertEqual("es", loadedMessage?.originalLanguage)
@@ -782,7 +782,7 @@ final class MessageDTO_Tests: XCTestCase {
             Assert.willBeEqual(messagePayload.isSilent, loadedMessage?.isSilent)
             Assert.willBeEqual(
                 Set(messagePayload.attachmentIDs(cid: channelId)),
-                loadedMessage.flatMap { Set($0.attachments.map(\.attachmentID)) }
+                loadedMessage.flatMap { Set($0.attachments.compactMap(\.attachmentID)) }
             )
         }
     }
@@ -817,6 +817,38 @@ final class MessageDTO_Tests: XCTestCase {
             channelDTO.inContext(database.viewContext).pinnedMessages
                 .contains(messageDTO.inContext(database.viewContext))
         )
+    }
+
+    func test_messagePayload_isPinned_whenAlreadyAddedToPinnedMessages() throws {
+        let channelId: ChannelId = .unique
+        let messageId: MessageId = .unique
+        let channelPayload: ChannelPayload = dummyPayload(with: channelId, pinnedMessages: [.dummy(messageId: messageId)])
+        let payload: MessagePayload = .dummy(
+            messageId: messageId,
+            authorUserId: .unique,
+            createdAt: "2018-12-12T15:33:46.488935Z".toDate(),
+            pinned: true
+        )
+
+        let (channelDTO, messageDTO): (ChannelDTO, MessageDTO) = try waitFor { completion in
+            var channelDTO: ChannelDTO!
+            var messageDTO: MessageDTO!
+
+            database.write { session in
+                // Create the channel first
+                channelDTO = try! session.saveChannel(payload: channelPayload, query: nil, cache: nil)
+                // Save the message twice
+                messageDTO = try! session.saveMessage(payload: payload, for: channelId, syncOwnReactions: true, cache: nil)
+                messageDTO = try! session.saveMessage(payload: payload, for: channelId, syncOwnReactions: true, cache: nil)
+            } completion: { _ in
+                completion((channelDTO, messageDTO))
+            }
+        }
+
+        let channel = try XCTUnwrap(channelDTO.inContext(database.viewContext))
+        let message = try XCTUnwrap(messageDTO.inContext(database.viewContext))
+        XCTAssertTrue(channel.pinnedMessages.contains(message))
+        XCTAssertEqual(channel.pinnedMessages.count, 1)
     }
 
     func test_messagePayload_isNotPinned_removedFromPinnedMessages() throws {
@@ -899,7 +931,7 @@ final class MessageDTO_Tests: XCTestCase {
             reactionScores: ["like": 10],
             reactionCounts: ["like": 2]
         )
-        let (channelDTO, messageDTO): (ChannelDTO, MessageDTO) = try waitFor { completion in
+        let (_, _): (ChannelDTO, MessageDTO) = try waitFor { completion in
             var channelDTO: ChannelDTO!
             var messageDTO: MessageDTO!
 
@@ -1162,6 +1194,7 @@ final class MessageDTO_Tests: XCTestCase {
                 createdAt: nil,
                 skipPush: false,
                 skipEnrichUrl: false,
+                poll: nil,
                 extraData: messageExtraData
             )
 
@@ -1303,6 +1336,7 @@ final class MessageDTO_Tests: XCTestCase {
                     createdAt: nil,
                     skipPush: false,
                     skipEnrichUrl: false,
+                    poll: nil,
                     extraData: [:]
                 )
                 message1Id = message1DTO.id
@@ -1325,6 +1359,7 @@ final class MessageDTO_Tests: XCTestCase {
                     createdAt: nil,
                     skipPush: false,
                     skipEnrichUrl: false,
+                    poll: nil,
                     extraData: [:]
                 )
                 // Reset the `locallyCreateAt` value of the second message to simulate the message was sent
@@ -1466,6 +1501,7 @@ final class MessageDTO_Tests: XCTestCase {
                 createdAt: nil,
                 skipPush: true,
                 skipEnrichUrl: true,
+                poll: nil,
                 extraData: [:]
             )
             newMessageId = messageDTO.id
@@ -1532,6 +1568,7 @@ final class MessageDTO_Tests: XCTestCase {
                 createdAt: nil,
                 skipPush: false,
                 skipEnrichUrl: false,
+                poll: nil,
                 extraData: [:]
             )
             messageId = messageDTO.id
@@ -1577,6 +1614,7 @@ final class MessageDTO_Tests: XCTestCase {
                 createdAt: nil,
                 skipPush: false,
                 skipEnrichUrl: false,
+                poll: nil,
                 extraData: [:]
             )
             threadReplyId = replyShownInChannelDTO.id
@@ -1635,6 +1673,7 @@ final class MessageDTO_Tests: XCTestCase {
                 createdAt: nil,
                 skipPush: false,
                 skipEnrichUrl: false,
+                poll: nil,
                 extraData: [:]
             )
         }
@@ -1662,6 +1701,7 @@ final class MessageDTO_Tests: XCTestCase {
                     createdAt: nil,
                     skipPush: false,
                     skipEnrichUrl: false,
+                    poll: nil,
                     extraData: [:]
                 )
             }, completion: completion)
@@ -1703,6 +1743,7 @@ final class MessageDTO_Tests: XCTestCase {
                     createdAt: nil,
                     skipPush: false,
                     skipEnrichUrl: false,
+                    poll: nil,
                     extraData: [:]
                 )
             }, completion: completion)
@@ -1789,6 +1830,7 @@ final class MessageDTO_Tests: XCTestCase {
                 createdAt: nil,
                 skipPush: false,
                 skipEnrichUrl: false,
+                poll: nil,
                 extraData: [:]
             )
             // Get reply messageId
@@ -2854,7 +2896,7 @@ final class MessageDTO_Tests: XCTestCase {
 
     // MARK: - removeReaction
 
-    func test_removeReaction_whenOnlyOneReactionExists() {
+    func test_removeReaction_whenOnlyOneReactionExists() throws {
         let userId = "user_id"
         let messageId = "message_id"
         let reactionType: MessageReactionType = "reaction-type"
@@ -2869,25 +2911,25 @@ final class MessageDTO_Tests: XCTestCase {
         XCTAssertNil(error)
 
         // The message should not contain those reactions
-        let message = self.message(with: messageId)
-        XCTAssertTrue(message?.latestReactions.contains { $0.type.rawValue == reactionType.rawValue } == false)
-        XCTAssertTrue(message?.currentUserReactions.contains { $0.type.rawValue == reactionType.rawValue } == false)
+        let message = try XCTUnwrap(self.message(with: messageId))
+        XCTAssertTrue(message.latestReactions.contains { $0.type.rawValue == reactionType.rawValue } == false)
+        XCTAssertTrue(message.currentUserReactions.contains { $0.type.rawValue == reactionType.rawValue } == false)
 
         // Updates count, scores and groups optimistically
-        XCTAssertEqual(message?.reactionCounts, [
-            "other-id-1": 1,
-            "other-id-2": 1
-        ])
-        XCTAssertEqual(message?.reactionScores, [
-            "other-id-1": 1,
-            "other-id-2": 1
-        ])
-        XCTAssertEqual(message?.reactionGroups["other-id-1"]?.count, 1)
-        XCTAssertEqual(message?.reactionGroups["other-id-2"]?.count, 1)
-        XCTAssertEqual(message?.reactionGroups["reaction-type"]?.count, nil)
-        XCTAssertEqual(message?.reactionGroups["other-id-1"]?.sumScores, 1)
-        XCTAssertEqual(message?.reactionGroups["other-id-2"]?.sumScores, 1)
-        XCTAssertEqual(message?.reactionGroups["reaction-type"]?.sumScores, nil)
+        XCTAssertEqual(2, message.reactionCounts.count)
+        XCTAssertEqual(1, message.reactionCounts["other-id-1"])
+        XCTAssertEqual(1, message.reactionCounts["other-id-2"])
+        
+        XCTAssertEqual(2, message.reactionScores.count)
+        XCTAssertEqual(1, message.reactionScores["other-id-1"])
+        XCTAssertEqual(1, message.reactionScores["other-id-2"])
+        
+        XCTAssertEqual(message.reactionGroups["other-id-1"]?.count, 1)
+        XCTAssertEqual(message.reactionGroups["other-id-2"]?.count, 1)
+        XCTAssertEqual(message.reactionGroups[reactionType]?.count, nil)
+        XCTAssertEqual(message.reactionGroups["other-id-1"]?.sumScores, 1)
+        XCTAssertEqual(message.reactionGroups["other-id-2"]?.sumScores, 1)
+        XCTAssertEqual(message.reactionGroups[reactionType]?.sumScores, nil)
     }
 
     func test_removeReaction_whenMultipleReactionsExist() {
@@ -2898,7 +2940,6 @@ final class MessageDTO_Tests: XCTestCase {
         prepareEnvironment(createdUserId: userId, createdMessageId: messageId)
 
         // We add the reaction to the message so that it already contains it
-        let reactionId = makeReactionId(userId: userId, messageId: messageId, type: reactionType)
         _ = runAddReaction(messageId: messageId, type: reactionType)
         // Add reaction twice
         _ = runAddReaction(messageId: messageId, type: reactionType)
@@ -3838,14 +3879,6 @@ final class MessageDTO_Tests: XCTestCase {
     // MARK: Max depth
 
     func test_asModel_onlyFetchesUntilCertainRelationship() throws {
-        let originalIsBackgroundMappingEnabled = StreamRuntimeCheck._isBackgroundMappingEnabled
-        try test_asModel_onlyFetchesUntilCertainRelationship(isBackgroundMappingEnabled: false)
-        try test_asModel_onlyFetchesUntilCertainRelationship(isBackgroundMappingEnabled: true)
-        StreamRuntimeCheck._isBackgroundMappingEnabled = originalIsBackgroundMappingEnabled
-    }
-
-    private func test_asModel_onlyFetchesUntilCertainRelationship(isBackgroundMappingEnabled: Bool) throws {
-        StreamRuntimeCheck._isBackgroundMappingEnabled = isBackgroundMappingEnabled
         let cid = ChannelId.unique
 
         // GIVEN
@@ -3896,12 +3929,8 @@ final class MessageDTO_Tests: XCTestCase {
         XCTAssertEqual(quoted2Message.id, quoted2MessagePayload.id)
 
         let quoted3Message = quoted2Message.quotedMessage
-        if isBackgroundMappingEnabled {
-            // 3rd level of depth is not mapped
-            XCTAssertNil(quoted3Message)
-        } else {
-            XCTAssertEqual(quoted3Message?.id, quoted3MessagePayload.id)
-        }
+        // 3rd level of depth is not mapped
+        XCTAssertNil(quoted3Message)
     }
 
     // MARK: - Helpers:
@@ -3928,9 +3957,11 @@ final class MessageDTO_Tests: XCTestCase {
 
     private func addReactionToMessage(userId: UserId, messageId: MessageId, reactionId: ReactionString) {
         try? database.writeSynchronously { session in
+            let reactionScore = 1
             try session.saveReaction(
                 payload: .dummy(
                     type: .init(rawValue: reactionId.reactionType),
+                    score: reactionScore,
                     messageId: messageId,
                     user: .dummy(userId: userId)
                 ),
@@ -3941,12 +3972,12 @@ final class MessageDTO_Tests: XCTestCase {
             let message = session.message(id: messageId)
             message?.latestReactions = [reactionId, "other-id-1"]
             message?.ownReactions = [reactionId, "other-id-2"]
-            message?.reactionScores = [reactionId.reactionType: 1, "other-id-1": 1, "other-id-2": 1]
+            message?.reactionScores = [reactionId.reactionType: reactionScore, "other-id-1": 1, "other-id-2": 1]
             message?.reactionCounts = [reactionId.reactionType: 1, "other-id-1": 1, "other-id-2": 1]
             message?.reactionGroups = Set([
                 .init(
                     type: .init(rawValue: reactionId.reactionType),
-                    sumScores: 1,
+                    sumScores: reactionScore,
                     count: 1,
                     firstReactionAt: .unique,
                     lastReactionAt: .unique,
@@ -4100,9 +4131,11 @@ final class MessageDTO_Tests: XCTestCase {
     }
 
     // Creates a messages observer (FRC wrapper)
-    private func createMessagesFRC(for channelPayload: ChannelPayload) throws -> ListDatabaseObserverWrapper<ChatMessage, MessageDTO> {
-        let observer = ListDatabaseObserverWrapper(
-            isBackground: false,
+    private func createMessagesFRC(
+        for channelPayload: ChannelPayload,
+        onChange: @escaping ([ListChange<ChatMessage>]) -> Void
+    ) throws -> StateLayerDatabaseObserver<ListResult, ChatMessage, MessageDTO> {
+        let observer = StateLayerDatabaseObserver(
             database: database,
             fetchRequest: MessageDTO.messagesFetchRequest(
                 for: channelPayload.channel.cid,
@@ -4111,9 +4144,11 @@ final class MessageDTO_Tests: XCTestCase {
                 deletedMessagesVisibility: .visibleForCurrentUser,
                 shouldShowShadowedMessages: false
             ),
-            itemCreator: { try $0.asModel() as ChatMessage }
+            itemCreator: { try $0.asModel() as ChatMessage },
+            itemReuseKeyPaths: (\ChatMessage.id, \MessageDTO.id),
+            sorting: []
         )
-        try observer.startObserving()
+        try observer.startObserving(onContextDidChange: { _, changes in onChange(changes) })
         return observer
     }
 }

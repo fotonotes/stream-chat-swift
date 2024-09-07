@@ -142,6 +142,17 @@ class WebSocketClient {
             eventsBatcher.processImmediately(completion: completion)
         }
     }
+
+    func timeout() {
+        let previousState = connectionState
+        connectionState = .disconnected(source: .timeout(from: previousState))
+        engineQueue.async { [engine, eventsBatcher] in
+            engine?.disconnect()
+
+            eventsBatcher.processImmediately {}
+        }
+        log.error("Connection timed out. `\(connectionState)", subsystems: .webSocket)
+    }
 }
 
 protocol ConnectionStateDelegate: AnyObject {
@@ -164,11 +175,7 @@ extension WebSocketClient {
         var createPingController: CreatePingController = WebSocketPingController.init
 
         var createEngine: CreateEngine = {
-            if #available(iOS 13, *), !StreamRuntimeCheck._useLegacyWebSocketConnection {
-                return URLSessionWebSocketEngine(request: $0, sessionConfiguration: $1, callbackQueue: $2)
-            } else {
-                return StarscreamWebSocketProvider(request: $0, sessionConfiguration: $1, callbackQueue: $2)
-            }
+            URLSessionWebSocketEngine(request: $0, sessionConfiguration: $1, callbackQueue: $2)
         }
 
         var eventBatcherBuilder: (
@@ -205,6 +212,8 @@ extension WebSocketClient: WebSocketEngineDelegate {
         } catch is ClientError.IgnoredEventType {
             log.info("Skipping unsupported event type with payload: \(message)", subsystems: .webSocket)
         } catch {
+            log.error(error)
+
             // Check if the message contains an error object from the server
             let webSocketError = message
                 .data(using: .utf8)
@@ -281,7 +290,7 @@ extension WebSocketClient {
 #endif
 
 extension ClientError {
-    public class WebSocket: ClientError {}
+    public final class WebSocket: ClientError {}
 }
 
 /// WebSocket Error

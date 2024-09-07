@@ -14,7 +14,7 @@ extension StreamChatWrapper {
         }
 
         // Set the log level
-        LogConfig.level = .warning
+        LogConfig.level = StreamRuntimeCheck.logLevel ?? .warning
         LogConfig.formatters = [
             PrefixLogFormatter(prefixes: [.info: "ℹ️", .debug: "🛠", .warning: "⚠️", .error: "🚨"])
         ]
@@ -56,10 +56,12 @@ extension StreamChatWrapper {
         Components.default.channelContentView = DemoChatChannelListItemView.self
         Components.default.channelListRouter = DemoChatChannelListRouter.self
         Components.default.channelVC = DemoChatChannelVC.self
+        Components.default.threadVC = DemoChatThreadVC.self
         Components.default.messageContentView = DemoChatMessageContentView.self
         Components.default.messageActionsVC = DemoChatMessageActionsVC.self
         Components.default.messageLayoutOptionsResolver = DemoChatMessageLayoutOptionsResolver()
         Components.default.reactionsSorting = ReactionSorting.byFirstReactionAt
+        Components.default.channelListErrorView = DemoChatChannelListErrorView.self
 
         // Customize MarkdownFormatter
         let defaultFormatter = DefaultMarkdownFormatter()

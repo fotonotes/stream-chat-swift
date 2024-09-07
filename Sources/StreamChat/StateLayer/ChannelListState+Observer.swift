@@ -4,7 +4,6 @@
 
 import Foundation
 
-@available(iOS 13.0, *)
 extension ChannelListState {
     final class Observer {
         private let channelListObserver: StateLayerDatabaseObserver<ListResult, ChatChannel, ChannelDTO>
@@ -32,12 +31,13 @@ extension ChannelListState {
             self.eventNotificationCenter = eventNotificationCenter
             
             channelListObserver = StateLayerDatabaseObserver(
-                databaseContainer: database,
+                database: database,
                 fetchRequest: ChannelDTO.channelListFetchRequest(
                     query: query,
                     chatClientConfig: clientConfig
                 ),
                 itemCreator: { try $0.asModel() },
+                itemReuseKeyPaths: (\ChatChannel.cid.rawValue, \ChannelDTO.cid),
                 sorting: query.sort.runtimeSorting
             )
             channelListLinker = ChannelListLinker(

@@ -284,10 +284,11 @@ private extension URL {
         let existingQueryItems = components.queryItems ?? []
         components.queryItems = existingQueryItems + items
 
-        // Manually replace all occurrences of "+" in the query because it can be understood as a placeholder
-        // value for a space. We want to keep it as "+" so we have to manually percent-encode it.
+        // Manually replace all occurrences of "+" and ";" in the query because it can be understood as a placeholder
+        // value for a space. We want to keep it as "+" and ";" so we have to manually percent-encode it.
         components.percentEncodedQuery = components.percentEncodedQuery?
             .replacingOccurrences(of: "+", with: "%2B")
+            .replacingOccurrences(of: ";", with: "%3B")
 
         guard let newURL = components.url else {
             throw ClientError.InvalidURL("Can't create a new `URL` after appending query items: \(items).")
@@ -302,8 +303,8 @@ protocol ConnectionDetailsProviderDelegate: AnyObject {
     func provideToken(timeout: TimeInterval, completion: @escaping (Result<Token, Error>) -> Void)
 }
 
-extension ClientError {
-    class InvalidURL: ClientError {}
-    class InvalidJSON: ClientError {}
-    class MissingConnectionId: ClientError {}
+public extension ClientError {
+    final class InvalidURL: ClientError {}
+    final class InvalidJSON: ClientError {}
+    final class MissingConnectionId: ClientError {}
 }

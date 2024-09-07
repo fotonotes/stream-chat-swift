@@ -28,20 +28,11 @@ final class DemoChatChannelListRouter: ChatChannelListRouter {
     }
 
     override func showCurrentUserProfile() {
-        rootViewController.presentAlert(title: nil, actions: [
-            .init(title: "Show Profile", style: .default, handler: { [weak self] _ in
-                guard let self = self else { return }
-                let client = self.rootViewController.controller.client
-                let viewController = UserProfileViewController(currentUserController: client.currentUserController())
-                self.rootNavigationController?.pushViewController(viewController, animated: true)
-            }),
-            .init(title: "Logout", style: .destructive, handler: { [weak self] _ in
-                self?.onLogout?()
-            }),
-            .init(title: "Disconnect", style: .destructive, handler: { [weak self] _ in
-                self?.onDisconnect?()
-            })
-        ])
+        rootViewController.presentUserOptionsAlert(
+            onLogout: onLogout,
+            onDisconnect: onDisconnect,
+            client: rootViewController.controller.client
+        )
     }
 
     override func showChannel(for cid: ChannelId) {
@@ -446,6 +437,21 @@ final class DemoChatChannelListRouter: ChatChannelListRouter {
                         query: .init(cid: cid, filter: .equal(.banned, to: true))
                     )
                 ), animated: true)
+            }),
+            .init(title: "Show Blocked Users", handler: { [unowned self] _ in
+                guard let cid = channelController.channel?.cid else { return }
+                let client = channelController.client
+                client.currentUserController().loadBlockedUsers { result in
+                    guard let blockedUsers = try? result.get() else { return }
+                    self.rootViewController.present(MembersViewController(
+                        membersController: client.memberListController(
+                            query: .init(
+                                cid: cid,
+                                filter: .in(.id, values: blockedUsers.map(\.userId))
+                            )
+                        )
+                    ), animated: true)
+                }
             }),
             .init(title: "Truncate channel w/o message", isEnabled: canUpdateChannel, handler: { _ in
                 channelController.truncateChannel { [unowned self] error in

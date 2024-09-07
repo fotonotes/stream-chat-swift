@@ -106,6 +106,9 @@ public struct Components {
     // The view that displays a banner to show the count of messages
     public var messagesCountDecorationView: ChatMessagesCountDecorationView.Type = ChatMessagesCountDecorationView.self
 
+    // A view that displays a badge with text. Usually to display unread counts in a red badge.
+    public var badgeView: BadgeView.Type = BadgeView.self
+
     // MARK: - Message List components
 
     /// The view controller responsible for rendering a list of messages.
@@ -119,6 +122,10 @@ public struct Components {
 
     /// The foundation view for the message list view controller.
     public var messageListView: ChatMessageListView.Type = ChatMessageListView.self
+
+    /// Whether the message list should have animations when inserting/updating/deleting messages.
+    /// By default it disabled since the SDK uses an inverted list to render the messages, and so animations do not look good overall.
+    public var isMessageListAnimationsEnabled: Bool = false
 
     /// A boolean value that determines whether the messages should start at the top
     /// of the list  when there are few messages. By default it is `false`.
@@ -345,6 +352,31 @@ public struct Components {
 
     // MARK: - Thread components
 
+    /// The router responsible for navigation on thread list screen.
+    @available(iOSApplicationExtension, unavailable)
+    public var threadListRouter: ChatThreadListRouter.Type = ChatThreadListRouter.self
+
+    /// A subclass of `UITableViewCell` that contains the `ChatThreadListItemView`.
+    public var threadListItemCell: ChatThreadListItemCell.Type = ChatThreadListItemCell.self
+
+    /// The view that displays the thread information in the Thread List.
+    public var threadListItemView: ChatThreadListItemView.Type = ChatThreadListItemView.self
+
+    /// The view that shows the number of unreads in the Thread List.
+    public var threadUnreadCountView: ChatThreadUnreadCountView.Type = ChatThreadUnreadCountView.self
+
+    /// The view shown when new threads are available to fetch.
+    public var threadListHeaderBannerView: ChatThreadListHeaderBannerView.Type = ChatThreadListHeaderBannerView.self
+
+    /// The view shown when the thread list is loading threads.
+    public var threadListLoadingView: ChatThreadListLoadingView.Type = ChatThreadListLoadingView.self
+
+    /// The view shown when the thread list is empty.
+    public var threadListEmptyView: ChatThreadListEmptyView.Type = ChatThreadListEmptyView.self
+
+    /// The view shown when the thread list fails to load threads.
+    public var threadListErrorView: ChatThreadListErrorView.Type = ChatThreadListErrorView.self
+
     /// The view controller used to display the detail of a message thread.
     public var threadVC: ChatThreadVC.Type = ChatThreadVC.self
 
@@ -390,7 +422,7 @@ public struct Components {
     /// The view that shows the channel avatar including an indicator of the user presence (online/offline).
     public var channelAvatarView: ChatChannelAvatarView.Type = ChatChannelAvatarView.self
 
-    /// The view that shows a number of unread messages in channel.
+    /// The view that shows the number of unreads in the channel list.
     public var channelUnreadCountView: ChatChannelUnreadCountView.Type = ChatChannelUnreadCountView.self
 
     /// The view that is displayed when there are no channels on the list, i.e. when is on empty state.
@@ -527,6 +559,11 @@ public struct Components {
 
     /// The view that shows current user avatar.
     public var currentUserAvatarView: CurrentChatUserAvatarView.Type = CurrentChatUserAvatarView.self
+    
+    // MARK: - User blocking components
+    
+    /// Determines if users are able to block other users. Disabled by default.
+    public var isBlockingUsersEnabled = false
 
     // MARK: - Navigation
 

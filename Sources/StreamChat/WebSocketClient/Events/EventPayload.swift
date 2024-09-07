@@ -33,6 +33,9 @@ class EventPayload: Decodable {
         case lastReadMessageId = "last_read_message_id"
         case unreadMessagesCount = "unread_messages"
         case shadow
+        case thread
+        case vote = "poll_vote"
+        case poll
     }
 
     let eventType: EventType
@@ -46,7 +49,7 @@ class EventPayload: Decodable {
     let message: MessagePayload?
     let reaction: MessageReactionPayload?
     let watcherCount: Int?
-    let unreadCount: UnreadCount?
+    let unreadCount: UnreadCountPayload?
     let createdAt: Date?
     let isChannelHistoryCleared: Bool?
     let banReason: String?
@@ -59,6 +62,12 @@ class EventPayload: Decodable {
     let lastReadMessageId: MessageId?
     let lastReadAt: Date?
     let unreadMessagesCount: Int?
+    var poll: PollPayload?
+    var vote: PollVotePayload?
+
+    /// Thread Data, it is stored in Result, to be easier to debug decoding errors
+    let threadDetails: Result<ThreadDetailsPayload, Error>?
+    let threadPartial: Result<ThreadPartialPayload, Error>?
 
     init(
         eventType: EventType,
@@ -72,7 +81,7 @@ class EventPayload: Decodable {
         message: MessagePayload? = nil,
         reaction: MessageReactionPayload? = nil,
         watcherCount: Int? = nil,
-        unreadCount: UnreadCount? = nil,
+        unreadCount: UnreadCountPayload? = nil,
         createdAt: Date? = nil,
         isChannelHistoryCleared: Bool? = nil,
         banReason: String? = nil,
@@ -83,7 +92,11 @@ class EventPayload: Decodable {
         firstUnreadMessageId: MessageId? = nil,
         lastReadAt: Date? = nil,
         lastReadMessageId: MessageId? = nil,
-        unreadMessagesCount: Int? = nil
+        unreadMessagesCount: Int? = nil,
+        threadDetails: Result<ThreadDetailsPayload, Error>? = nil,
+        threadPartial: Result<ThreadPartialPayload, Error>? = nil,
+        poll: PollPayload? = nil,
+        vote: PollVotePayload? = nil
     ) {
         self.eventType = eventType
         self.connectionId = connectionId
@@ -108,6 +121,10 @@ class EventPayload: Decodable {
         self.lastReadAt = lastReadAt
         self.lastReadMessageId = lastReadMessageId
         self.unreadMessagesCount = unreadMessagesCount
+        self.threadPartial = threadPartial
+        self.threadDetails = threadDetails
+        self.poll = poll
+        self.vote = vote
     }
 
     required init(from decoder: Decoder) throws {
@@ -125,7 +142,7 @@ class EventPayload: Decodable {
         message = try container.decodeIfPresent(MessagePayload.self, forKey: .message)
         reaction = try container.decodeIfPresent(MessageReactionPayload.self, forKey: .reaction)
         watcherCount = try container.decodeIfPresent(Int.self, forKey: .watcherCount)
-        unreadCount = try? UnreadCount(from: decoder)
+        unreadCount = try? UnreadCountPayload(from: decoder)
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
         isChannelHistoryCleared = try container.decodeIfPresent(Bool.self, forKey: .isChannelHistoryCleared)
         banReason = try container.decodeIfPresent(String.self, forKey: .banReason)
@@ -137,6 +154,10 @@ class EventPayload: Decodable {
         lastReadAt = try container.decodeIfPresent(Date.self, forKey: .lastReadAt)
         lastReadMessageId = try container.decodeIfPresent(MessageId.self, forKey: .lastReadMessageId)
         unreadMessagesCount = try container.decodeIfPresent(Int.self, forKey: .unreadMessagesCount)
+        threadDetails = container.decodeAsResultIfPresent(ThreadDetailsPayload.self, forKey: .thread)
+        threadPartial = container.decodeAsResultIfPresent(ThreadPartialPayload.self, forKey: .thread)
+        vote = try container.decodeIfPresent(PollVotePayload.self, forKey: .vote)
+        poll = try container.decodeIfPresent(PollPayload.self, forKey: .poll)
     }
 
     func event() throws -> Event {
@@ -175,6 +196,8 @@ private extension PartialKeyPath where Root == EventPayload {
         case \EventPayload.parentId: return "parentId"
         case \EventPayload.hardDelete: return "hardDelete"
         case \EventPayload.shadow: return "shadow"
+        case \EventPayload.threadPartial: return "thread"
+        case \EventPayload.threadDetails: return "thread"
         default: return String(describing: self)
         }
     }
@@ -188,6 +211,19 @@ extension EventPayload {
         }
 
         return value
+    }
+
+    /// Get the value from the event payload and if it is a `Result` report the decoding error.
+    func value<Value>(at keyPath: KeyPath<EventPayload, Result<Value, Error>?>) throws -> Value {
+        guard let value = self[keyPath: keyPath] else {
+            throw ClientError.EventDecoding(missingValue: keyPath.stringValue, for: eventType)
+        }
+
+        if let error = value.error {
+            throw ClientError.EventDecoding(failedParsingValue: keyPath.stringValue, for: eventType, with: error)
+        }
+
+        return try value.get()
     }
 }
 

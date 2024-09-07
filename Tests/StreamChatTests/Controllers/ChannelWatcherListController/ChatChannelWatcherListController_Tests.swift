@@ -474,28 +474,27 @@ final class ChatChannelWatcherListController_Tests: XCTestCase {
 
 private class TestEnvironment {
     @Atomic var watcherListUpdater: ChannelUpdater_Mock?
-    @Atomic var watcherListObserver: ListDatabaseObserverWrapper_Mock<ChatUser, UserDTO>?
+    @Atomic var watcherListObserver: BackgroundListDatabaseObserver_Mock<ChatUser, UserDTO>?
     @Atomic var watcherListObserverSynchronizeError: Error?
 
     lazy var environment: ChatChannelWatcherListController.Environment = .init(
         channelUpdaterBuilder: { [unowned self] in
             self.watcherListUpdater = ChannelUpdater_Mock(
                 channelRepository: $0,
-                callRepository: $1,
-                messageRepository: $2,
-                paginationStateHandler: $3,
-                database: $4,
-                apiClient: $5
+                messageRepository: $1,
+                paginationStateHandler: $2,
+                database: $3,
+                apiClient: $4
             )
             return self.watcherListUpdater!
         },
         watcherListObserverBuilder: { [unowned self] in
             self.watcherListObserver = .init(
-                isBackground: $0,
-                database: $1,
-                fetchRequest: $2,
-                itemCreator: $3,
-                fetchedResultsControllerType: $4
+                database: $0,
+                fetchRequest: $1,
+                itemCreator: $2,
+                itemReuseKeyPaths: (\ChatUser.id, \UserDTO.id),
+                fetchedResultsControllerType: $3
             )
             self.watcherListObserver?.synchronizeError = self.watcherListObserverSynchronizeError
             return self.watcherListObserver!

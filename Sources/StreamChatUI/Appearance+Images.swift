@@ -25,11 +25,7 @@ public extension Appearance {
         }
 
         private static func loadSafely(systemName: String, assetsFallback: String) -> UIImage {
-            if #available(iOS 13.0, *) {
-                return UIImage(systemName: systemName) ?? loadImageSafely(with: assetsFallback)
-            } else {
-                return loadImageSafely(with: assetsFallback)
-            }
+            UIImage(systemName: systemName) ?? loadImageSafely(with: assetsFallback)
         }
 
         // MARK: - General
@@ -82,6 +78,10 @@ public extension Appearance {
         public var messageDeliveryStatusSent: UIImage = loadImageSafely(with: "message_receipt_sent")
         public var messageDeliveryStatusRead: UIImage = loadImageSafely(with: "message_receipt_read")
         public var messageDeliveryStatusFailed: UIImage = loadImageSafely(with: "message_receipt_failed")
+
+        // MARK: - Threads
+
+        public var threadIcon: UIImage = loadSafely(systemName: "text.bubble", assetsFallback: "text_bubble")
 
         // MARK: - Reactions
 

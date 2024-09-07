@@ -53,7 +53,6 @@ public class ChatChannelMemberListController: DataController, DelegateCallable, 
     /// An internal backing object for all publicly available Combine publishers. We use it to simplify the way we expose
     /// publishers. Instead of creating custom `Publisher` types, we use `CurrentValueSubject` and `PassthroughSubject` internally,
     /// and expose the published values by mapping them to a read-only `AnyPublisher` type.
-    @available(iOS 13, *)
     var basePublishers: BasePublishers {
         if let value = _basePublishers as? BasePublishers {
             return value
@@ -96,15 +95,12 @@ public class ChatChannelMemberListController: DataController, DelegateCallable, 
         )
     }
 
-    private func createMemberListObserver() -> ListDatabaseObserverWrapper<ChatChannelMember, MemberDTO> {
+    private func createMemberListObserver() -> BackgroundListDatabaseObserver<ChatChannelMember, MemberDTO> {
         let observer = environment.memberListObserverBuilder(
-            false,
             client.databaseContainer,
             MemberDTO.members(matching: query),
-            { try $0.asModel() },
-            NSFetchedResultsController<MemberDTO>.self
+            { try $0.asModel() }
         )
-
         observer.onDidChange = { [weak self] changes in
             self?.delegateCallback { [weak self] in
                 guard let self = self else {
@@ -163,13 +159,16 @@ extension ChatChannelMemberListController {
         ) -> ChannelMemberListUpdater = ChannelMemberListUpdater.init
 
         var memberListObserverBuilder: (
-            _ isBackgroundMappingEnabled: Bool,
             _ database: DatabaseContainer,
             _ fetchRequest: NSFetchRequest<MemberDTO>,
-            _ itemCreator: @escaping (MemberDTO) throws -> ChatChannelMember,
-            _ controllerType: NSFetchedResultsController<MemberDTO>.Type
-        ) -> ListDatabaseObserverWrapper<ChatChannelMember, MemberDTO> = {
-            .init(isBackground: $0, database: $1, fetchRequest: $2, itemCreator: $3, fetchedResultsControllerType: $4)
+            _ itemCreator: @escaping (MemberDTO) throws -> ChatChannelMember
+        ) -> BackgroundListDatabaseObserver<ChatChannelMember, MemberDTO> = {
+            BackgroundListDatabaseObserver(
+                database: $0,
+                fetchRequest: $1,
+                itemCreator: $2,
+                itemReuseKeyPaths: (\ChatChannelMember.id, \MemberDTO.id)
+            )
         }
     }
 }

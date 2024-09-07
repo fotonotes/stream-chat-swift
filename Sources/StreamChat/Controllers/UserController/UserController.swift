@@ -66,7 +66,6 @@ public class ChatUserController: DataController, DelegateCallable, DataStoreProv
     /// An internal backing object for all publicly available Combine publishers. We use it to simplify the way we expose
     /// publishers. Instead of creating custom `Publisher` types, we use `CurrentValueSubject` and `PassthroughSubject` internally,
     /// and expose the published values by mapping them to a read-only `AnyPublisher` type.
-    @available(iOS 13, *)
     var basePublishers: BasePublishers {
         if let value = _basePublishers as? BasePublishers {
             return value
@@ -113,9 +112,8 @@ public class ChatUserController: DataController, DelegateCallable, DataStoreProv
         )
     }
 
-    private func createUserObserver() -> EntityDatabaseObserverWrapper<ChatUser, UserDTO> {
+    private func createUserObserver() -> BackgroundEntityDatabaseObserver<ChatUser, UserDTO> {
         environment.userObserverBuilder(
-            StreamRuntimeCheck._isBackgroundMappingEnabled,
             client.databaseContainer,
             UserDTO.user(withID: userId),
             { try $0.asModel() },
@@ -160,6 +158,28 @@ public extension ChatUserController {
             }
         }
     }
+    
+    /// Blocks the user this controller manages.
+    /// - Parameter completion: The completion. Will be called on a **callbackQueue** when the network request is finished.
+    ///                         If request fails, the completion will be called with an error.
+    func block(completion: ((Error?) -> Void)? = nil) {
+        userUpdater.blockUser(userId) { error in
+            self.callback {
+                completion?(error)
+            }
+        }
+    }
+
+    /// Unblocks the user this controller manages.
+    /// - Parameter completion: The completion. Will be called on a **callbackQueue** when the network request is finished.
+    ///
+    func unblock(completion: ((Error?) -> Void)? = nil) {
+        userUpdater.unblockUser(userId) { error in
+            self.callback {
+                completion?(error)
+            }
+        }
+    }
 
     /// Flags the user this controller manages.
     /// - Parameter completion: The completion. Will be called on a **callbackQueue** when the network request is finished.
@@ -192,12 +212,11 @@ extension ChatUserController {
         ) -> UserUpdater = UserUpdater.init
 
         var userObserverBuilder: (
-            _ isBackgroundMappingEnabled: Bool,
             _ databaseContainer: DatabaseContainer,
             _ fetchRequest: NSFetchRequest<UserDTO>,
             _ itemCreator: @escaping (UserDTO) throws -> ChatUser,
             _ fetchedResultsControllerType: NSFetchedResultsController<UserDTO>.Type
-        ) -> EntityDatabaseObserverWrapper<ChatUser, UserDTO> = EntityDatabaseObserverWrapper.init
+        ) -> BackgroundEntityDatabaseObserver<ChatUser, UserDTO> = BackgroundEntityDatabaseObserver.init
     }
 }
 

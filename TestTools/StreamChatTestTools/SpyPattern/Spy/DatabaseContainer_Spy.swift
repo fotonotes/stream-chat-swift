@@ -24,6 +24,8 @@ public final class DatabaseContainer_Spy: DatabaseContainer, Spy {
 
     /// Every time a write session finishes this counter is increased
     @Atomic var writeSessionCounter: Int = 0
+    
+    @Atomic var didWrite: (() -> Void)?
 
     /// If set to `true` and the mock will remove its database files once deinited.
     var shouldCleanUpTempDBFiles = false
@@ -31,9 +33,7 @@ public final class DatabaseContainer_Spy: DatabaseContainer, Spy {
     private(set) var sessionMock: DatabaseSession_Mock?
 
     public convenience init(localCachingSettings: ChatClientConfig.LocalCaching? = nil) {
-        Self.cachedModel = nil
-        self.init(kind: .onDisk(databaseFileURL: .newTemporaryFileURL()), localCachingSettings: localCachingSettings)
-        shouldCleanUpTempDBFiles = true
+        self.init(kind: .inMemory, localCachingSettings: localCachingSettings)
     }
 
     override public init(
@@ -46,8 +46,10 @@ public final class DatabaseContainer_Spy: DatabaseContainer, Spy {
         deletedMessagesVisibility: ChatClientConfig.DeletedMessageVisibility? = nil,
         shouldShowShadowedMessages: Bool? = nil
     ) {
-        Self.cachedModel = nil
         init_kind = kind
+        if case .onDisk = kind {
+            shouldCleanUpTempDBFiles = true
+        }
         super.init(
             kind: kind,
             shouldFlushOnStart: shouldFlushOnStart,
@@ -61,7 +63,6 @@ public final class DatabaseContainer_Spy: DatabaseContainer, Spy {
     }
 
     convenience init(sessionMock: DatabaseSession_Mock) {
-        Self.cachedModel = nil
         self.init(kind: .inMemory)
         self.sessionMock = sessionMock
     }
@@ -114,6 +115,7 @@ public final class DatabaseContainer_Spy: DatabaseContainer, Spy {
         let completion: (Error?) -> Void = { error in
             completion(error)
             self._writeSessionCounter { $0 += 1 }
+            self.didWrite?()
         }
 
         if let error = write_errorResponse {
@@ -133,6 +135,19 @@ public final class DatabaseContainer_Spy: DatabaseContainer, Spy {
 }
 
 extension DatabaseContainer {
+    /// Reads changes from the DB synchronously. Only for test purposes!
+    func readSynchronously<T>(_ actions: @escaping (DatabaseSession) throws -> T) throws -> T {
+        let result = try waitFor { completion in
+            self.read(actions, completion: completion)
+        }
+        switch result {
+        case .success(let values):
+            return values
+        case .failure(let error):
+            throw error
+        }
+    }
+    
     /// Writes changes to the DB synchronously. Only for test purposes!
     func writeSynchronously(_ actions: @escaping (DatabaseSession) throws -> Void) throws {
         let error = try waitFor { completion in
@@ -384,6 +399,12 @@ extension DatabaseContainer {
                 query: query,
                 cache: nil
             )
+        }
+    }
+    
+    func createPoll(id: String = .unique, createdBy: UserPayload? = nil) throws {
+        try writeSynchronously { session in
+            try session.savePoll(payload: XCTestCase().dummyPollPayload(id: id, user: createdBy), cache: nil)
         }
     }
 }

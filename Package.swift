@@ -7,7 +7,7 @@ let package = Package(
     name: "StreamChat",
     defaultLocalization: "en",
     platforms: [
-        .iOS(.v12), .macOS(.v10_15)
+        .iOS(.v13), .macOS(.v11)
     ],
     products: [
         .library(
@@ -58,6 +58,6 @@ let package = Package(
 
 #if swift(>=5.6)
 package.dependencies.append(
-    .package(name: "SwiftDocCPlugin", url: "https://github.com/apple/swift-docc-plugin", .exact("1.0.0"))
+    .package(url: "https://github.com/apple/swift-docc-plugin", exact: "1.0.0")
 )
 #endif

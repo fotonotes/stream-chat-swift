@@ -76,6 +76,7 @@ class MessageDTO: NSManagedObject {
     @NSManaged var replies: Set<MessageDTO>
     @NSManaged var flaggedBy: CurrentUserDTO?
     @NSManaged var attachments: Set<AttachmentDTO>
+    @NSManaged var poll: PollDTO?
     @NSManaged var quotedMessage: MessageDTO?
     @NSManaged var quotedBy: Set<MessageDTO>
     @NSManaged var searches: Set<MessageSearchQueryDTO>
@@ -515,19 +516,6 @@ class MessageDTO: NSManagedObject {
         return (try? context.count(for: request)) ?? 0
     }
 
-    static func loadLastMessage(from userId: String, in cid: String, context: NSManagedObjectContext) -> MessageDTO? {
-        let request = NSFetchRequest<MessageDTO>(entityName: entityName)
-        request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
-            channelPredicate(with: cid),
-            .init(format: "user.id == %@", userId),
-            .init(format: "type != %@", MessageType.ephemeral.rawValue),
-            messageSentPredicate()
-        ])
-        request.sortDescriptors = [NSSortDescriptor(keyPath: \MessageDTO.createdAt, ascending: false)]
-        request.fetchLimit = 1
-        return load(by: request, context: context).first
-    }
-
     static func loadSendingMessages(context: NSManagedObjectContext) -> [MessageDTO] {
         let request = NSFetchRequest<MessageDTO>(entityName: MessageDTO.entityName)
         request.sortDescriptors = [NSSortDescriptor(keyPath: \MessageDTO.locallyCreatedAt, ascending: false)]
@@ -637,6 +625,7 @@ extension NSManagedObjectContext: MessageDatabaseSession {
         createdAt: Date?,
         skipPush: Bool,
         skipEnrichUrl: Bool,
+        poll: PollPayload?,
         extraData: [String: RawJSON]
     ) throws -> MessageDTO {
         guard let currentUserDTO = currentUser else {
@@ -677,6 +666,10 @@ extension NSManagedObjectContext: MessageDatabaseSession {
         message.reactionScores = [:]
         message.reactionCounts = [:]
         message.reactionGroups = []
+        
+        if let poll {
+            message.poll = try? savePoll(payload: poll, cache: nil)
+        }
 
         message.attachments = Set(
             try attachments.enumerated().map { index, attachment in
@@ -724,6 +717,12 @@ extension NSManagedObjectContext: MessageDatabaseSession {
         if dto.localMessageState == .pendingSend || dto.localMessageState == .pendingSync {
             return dto
         }
+        // Local text edit before receiving the WS event
+        if let localDate = dto.textUpdatedAt?.bridgeDate,
+           let payloadDate = payload.messageTextUpdatedAt,
+           localDate > payloadDate {
+            return dto
+        }
 
         dto.cid = payload.cid?.rawValue
         dto.text = payload.text
@@ -768,7 +767,7 @@ extension NSManagedObjectContext: MessageDatabaseSession {
 
         if dto.pinned && !channelDTO.pinnedMessages.contains(dto) {
             channelDTO.pinnedMessages.insert(dto)
-        } else {
+        } else if !dto.pinned {
             channelDTO.pinnedMessages.remove(dto)
         }
 
@@ -838,6 +837,11 @@ extension NSManagedObjectContext: MessageDatabaseSession {
             }
         )
         dto.attachments = attachments
+        
+        if let poll = payload.poll {
+            let pollDto = try savePoll(payload: poll, cache: cache)
+            dto.poll = pollDto
+        }
 
         // Only insert message into Parent's replies if not already present.
         // This in theory would not be needed since replies is a Set, but
@@ -1150,6 +1154,53 @@ extension NSManagedObjectContext: MessageDatabaseSession {
             $0.localState = .pendingUpload
         }
     }
+    
+    func loadMessage(
+        before id: MessageId,
+        cid: String
+    ) throws -> MessageDTO? {
+        try MessageDTO.loadMessage(
+            before: id,
+            cid: cid,
+            deletedMessagesVisibility: deletedMessagesVisibility ?? .alwaysVisible,
+            shouldShowShadowedMessages: shouldShowShadowedMessages ?? true,
+            context: self
+        )
+    }
+    
+    func loadMessages(
+        from fromIncludingDate: Date,
+        to toIncludingDate: Date,
+        in cid: ChannelId,
+        sortAscending: Bool
+    ) throws -> [MessageDTO] {
+        try MessageDTO.loadMessages(
+            from: fromIncludingDate,
+            to: toIncludingDate,
+            in: cid,
+            sortAscending: sortAscending,
+            deletedMessagesVisibility: deletedMessagesVisibility ?? .alwaysVisible,
+            shouldShowShadowedMessages: shouldShowShadowedMessages ?? true,
+            context: self
+        )
+    }
+    
+    func loadReplies(
+        from fromIncludingDate: Date,
+        to toIncludingDate: Date,
+        in messageId: MessageId,
+        sortAscending: Bool
+    ) throws -> [MessageDTO] {
+        try MessageDTO.loadReplies(
+            from: fromIncludingDate,
+            to: toIncludingDate,
+            in: messageId,
+            sortAscending: sortAscending,
+            deletedMessagesVisibility: deletedMessagesVisibility ?? .alwaysVisible,
+            shouldShowShadowedMessages: shouldShowShadowedMessages ?? true,
+            context: self
+        )
+    }
 }
 
 extension MessageDTO {
@@ -1204,6 +1255,7 @@ extension MessageDTO {
             mentionedUserIds: mentionedUserIds,
             pinned: pinned,
             pinExpires: pinExpires?.bridgeDate,
+            pollId: poll?.id,
             extraData: decodedExtraData
         )
     }
@@ -1286,89 +1338,71 @@ private extension ChatMessage {
         } else {
             pinDetails = nil
         }
+        
+        poll = try? dto.poll?.asModel()
 
         if let currentUser = context.currentUser {
             isSentByCurrentUser = currentUser.user.id == dto.user.id
-            $_currentUserReactions = ({
-                Set(
+            if !dto.ownReactions.isEmpty {
+                currentUserReactions = Set(
                     MessageReactionDTO
                         .loadReactions(ids: dto.ownReactions, context: context)
                         .compactMap { try? $0.asModel() }
                 )
-            }, dto.managedObjectContext)
-            $_currentUserReactionsCount = ({ dto.ownReactions.count }, dto.managedObjectContext)
+            } else {
+                currentUserReactions = []
+            }
         } else {
             isSentByCurrentUser = false
-            $_currentUserReactions = ({ [] }, nil)
-            $_currentUserReactionsCount = ({ 0 }, nil)
+            currentUserReactions = []
         }
 
-        $_latestReactions = ({
-            Set(
+        latestReactions = {
+            guard !dto.latestReactions.isEmpty else { return Set() }
+            return Set(
                 MessageReactionDTO
                     .loadReactions(ids: dto.latestReactions, context: context)
                     .compactMap { try? $0.asModel() }
             )
-        }, dto.managedObjectContext)
+        }()
 
-        $_threadParticipantsCount = ({ dto.threadParticipants.count }, nil)
-        if dto.threadParticipants.array.isEmpty {
-            $_threadParticipants = ({ [] }, nil)
-        } else {
-            $_threadParticipants = (
-                {
-                    let threadParticipants = dto.threadParticipants.array as? [UserDTO] ?? []
-                    return threadParticipants.compactMap { try? $0.asModel() }
-                },
-                dto.managedObjectContext
-            )
-        }
+        threadParticipants = dto.threadParticipants.array
+            .compactMap { $0 as? UserDTO }
+            .compactMap { try? $0.asModel() }
 
-        $_mentionedUsers = ({
-            guard dto.isValid else { return [] }
-            return Set(dto.mentionedUsers.compactMap { try? $0.asModel() })
-        }, dto.managedObjectContext)
+        mentionedUsers = Set(dto.mentionedUsers.compactMap { try? $0.asModel() })
 
-        let user = try dto.user.asModel()
-        $_author = ({ user }, nil)
-        $_attachments = ({
-            dto.attachments
-                .compactMap { $0.asAnyModel() }
-                .sorted { $0.id.index < $1.id.index }
-        }, dto.managedObjectContext)
+        author = try dto.user.asModel()
+        _attachments = dto.attachments
+            .compactMap { $0.asAnyModel() }
+            .sorted { $0.id.index < $1.id.index }
 
-        if dto.replies.isEmpty {
-            $_latestReplies = ({ [] }, nil)
-        } else {
-            $_latestReplies = ({
-                MessageDTO
-                    .loadReplies(for: dto.id, limit: 5, context: context)
-                    .compactMap { try? ChatMessage(fromDTO: $0, depth: depth) }
-            }, dto.managedObjectContext)
-        }
+        latestReplies = {
+            guard dto.replyCount > 0 else { return [] }
+            return dto.replies
+                .sorted(by: { $0.createdAt.bridgeDate > $1.createdAt.bridgeDate })
+                .prefix(5)
+                .compactMap { try? ChatMessage(fromDTO: $0, depth: depth) }
+        }()
 
-        $_quotedMessage = ({ try? dto.quotedMessage?.relationshipAsModel(depth: depth) }, dto.managedObjectContext)
+        let message = try? dto.quotedMessage?.relationshipAsModel(depth: depth)
+        _quotedMessage = { message }
 
-        let readBy = {
-            Set(dto.reads.compactMap { try? $0.user.asModel() })
-        }
-
-        $_readBy = (readBy, dto.managedObjectContext)
-        $_readByCount = ({ dto.reads.count }, dto.managedObjectContext)
+        readBy = Set(dto.reads.compactMap { try? $0.user.asModel() })
     }
 }
 
 extension ClientError {
-    class CurrentUserDoesNotExist: ClientError {
+    final class CurrentUserDoesNotExist: ClientError {
         override var localizedDescription: String {
             "There is no `CurrentUserDTO` instance in the DB."
                 + "Make sure to call `client.currentUserController.reloadUserIfNeeded()`"
         }
     }
 
-    class MessagePayloadSavingFailure: ClientError {}
+    final class MessagePayloadSavingFailure: ClientError {}
 
-    class ChannelDoesNotExist: ClientError {
+    final class ChannelDoesNotExist: ClientError {
         init(cid: ChannelId) {
             super.init("There is no `ChannelDTO` instance in the DB matching cid: \(cid).")
         }

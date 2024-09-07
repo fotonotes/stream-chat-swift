@@ -41,7 +41,6 @@ public class ChatChannelMemberController: DataController, DelegateCallable, Data
     /// An internal backing object for all publicly available Combine publishers. We use it to simplify the way we expose
     /// publishers. Instead of creating custom `Publisher` types, we use `CurrentValueSubject` and `PassthroughSubject` internally,
     /// and expose the published values by mapping them to a read-only `AnyPublisher` type.
-    @available(iOS 13, *)
     var basePublishers: BasePublishers {
         if let value = _basePublishers as? BasePublishers {
             return value
@@ -128,9 +127,8 @@ public class ChatChannelMemberController: DataController, DelegateCallable, Data
         )
     }
 
-    private func createMemberObserver() -> EntityDatabaseObserverWrapper<ChatChannelMember, MemberDTO> {
+    private func createMemberObserver() -> BackgroundEntityDatabaseObserver<ChatChannelMember, MemberDTO> {
         environment.memberObserverBuilder(
-            StreamRuntimeCheck._isBackgroundMappingEnabled,
             client.databaseContainer,
             MemberDTO.member(userId, in: cid),
             { try $0.asModel() },
@@ -229,12 +227,11 @@ extension ChatChannelMemberController {
         ) -> ChannelMemberListUpdater = ChannelMemberListUpdater.init
 
         var memberObserverBuilder: (
-            _ isBackgroundMappingEnabled: Bool,
             _ databaseContainer: DatabaseContainer,
             _ fetchRequest: NSFetchRequest<MemberDTO>,
             _ itemCreator: @escaping (MemberDTO) throws -> ChatChannelMember,
             _ fetchedResultsControllerType: NSFetchedResultsController<MemberDTO>.Type
-        ) -> EntityDatabaseObserverWrapper<ChatChannelMember, MemberDTO> = EntityDatabaseObserverWrapper.init
+        ) -> BackgroundEntityDatabaseObserver<ChatChannelMember, MemberDTO> = BackgroundEntityDatabaseObserver.init
     }
 }
 

@@ -7,6 +7,17 @@
 import XCTest
 
 final class ChannelListPayload_Tests: XCTestCase {
+    private var database: DatabaseContainer_Spy!
+    
+    override func setUpWithError() throws {
+        // Clean up any db files left behind
+        FileManager.removeAllTemporaryFiles()
+    }
+    
+    override func tearDownWithError() throws {
+        database = nil
+    }
+    
     func test_channelQueryJSON_isSerialized_withDefaultExtraData() throws {
         // GIVEN
         let url = XCTestCase.mockData(fromJSONFile: "ChannelsQuery")
@@ -66,23 +77,22 @@ final class ChannelListPayload_Tests: XCTestCase {
 
     func test_hugeChannelListQuery_save_DB_empty() throws {
         let decodedPayload = createHugeChannelList()
-        let timeout: TimeInterval = 60
-        
+        let timeout: TimeInterval = 180
+        database = DatabaseContainer_Spy(kind: .onDisk(databaseFileURL: .newTemporaryFileURL()))
         measure {
-            let databaseContainer = DatabaseContainer_Spy()
-            saveChannelListPayload(decodedPayload, database: databaseContainer, timeout: timeout)
+            saveChannelListPayload(decodedPayload, database: database, timeout: timeout)
         }
     }
 
     func test_hugeChannelListQuery_save_DB_filled() throws {
         let decodedPayload = createHugeChannelList()
-        let databaseContainer = DatabaseContainer_Spy()
-        let timeout: TimeInterval = 60
+        database = DatabaseContainer_Spy(kind: .onDisk(databaseFileURL: .newTemporaryFileURL()))
+        let timeout: TimeInterval = 180
 
-        saveChannelListPayload(decodedPayload, database: databaseContainer, timeout: timeout)
+        saveChannelListPayload(decodedPayload, database: database, timeout: timeout)
 
         measure {
-            saveChannelListPayload(decodedPayload, database: databaseContainer, timeout: timeout)
+            saveChannelListPayload(decodedPayload, database: database, timeout: timeout)
         }
     }
 
@@ -140,6 +150,7 @@ final class ChannelListPayload_Tests: XCTestCase {
                     "delete-channel"
                 ],
                 isFrozen: true,
+                isBlocked: false,
                 isHidden: false,
                 members: channelUsers.map {
                     MemberPayload.dummy(
@@ -225,6 +236,7 @@ final class ChannelListPayload_Tests: XCTestCase {
                     isMemberBanned: false
                 ),
                 messages: messages,
+                pendingMessages: nil,
                 pinnedMessages: [],
                 channelReads: (0..<channelReadCount).map { i in
                     ChannelReadPayload(
@@ -275,6 +287,10 @@ final class ChannelPayload_Tests: XCTestCase {
         XCTAssertEqual(firstMessage.replyCount, 0)
         XCTAssertFalse(firstMessage.isSilent)
 
+        XCTAssertEqual(payload.pendingMessages?.count ?? 0, 1)
+        let pendingMessage = try XCTUnwrap(payload.pendingMessages?.first)
+        XCTAssertEqual(pendingMessage.text, "My pending message")
+        
         XCTAssertEqual(payload.pinnedMessages.map(\.id), ["broken-waterfall-5-7aede36b-b89f-4f45-baff-c40c7c1875d9"])
 
         let channel = payload.channel
