@@ -1,17 +1,18 @@
 {
-    "channel_id": "62291f0a-67f7-11ef-bc15-c6eef6ed0640",
+    "channel_id": "ac8668ca-97e8-11ef-bdb2-fa017888627c",
+    "channel_last_message_at": "2024-11-01T00:31:49.989369Z",
     "channel_type": "messaging",
-    "cid": "messaging:62291f0a-67f7-11ef-bc15-c6eef6ed0640",
-    "created_at": "2024-09-01T00:16:11.768406088Z",
+    "cid": "messaging:ac8668ca-97e8-11ef-bdb2-fa017888627c",
+    "created_at": "2024-11-01T00:31:50.542527046Z",
     "member": {
         "banned": false,
         "channel_role": "channel_member",
-        "created_at": "2024-09-01T00:16:11.760869Z",
+        "created_at": "2024-11-01T00:31:50.532289Z",
         "notifications_muted": false,
         "role": "admin",
         "shadow_banned": false,
         "status": "member",
-        "updated_at": "2024-09-01T00:16:11.760869Z",
+        "updated_at": "2024-11-01T00:31:50.532289Z",
         "user": {
             "banned": false,
             "birthland": "Polis Massa",
@@ -19,7 +20,8 @@
             "id": "leia_organa",
             "image": "https://vignette.wikia.nocookie.net/starwars/images/f/fc/Leia_Organa_TLJ.png",
             "language": "en",
-            "last_active": "2024-08-30T14:16:49.393869Z",
+            "last_active": "2024-11-01T00:19:59.407686924Z",
+            "last_engaged_at": "2024-10-31T01:33:56.178274Z",
             "name": "Leia Organa",
             "online": false,
             "private_settings": {
@@ -31,7 +33,7 @@
                 }
             },
             "role": "admin",
-            "updated_at": "2024-08-29T18:09:28.42841Z"
+            "updated_at": "2024-10-25T01:26:44.215389Z"
         },
         "user_id": "leia_organa"
     },
@@ -43,7 +45,8 @@
         "id": "leia_organa",
         "image": "https://vignette.wikia.nocookie.net/starwars/images/f/fc/Leia_Organa_TLJ.png",
         "language": "en",
-        "last_active": "2024-08-30T14:16:49.393869Z",
+        "last_active": "2024-11-01T00:19:59.407686924Z",
+        "last_engaged_at": "2024-10-31T01:33:56.178274Z",
         "name": "Leia Organa",
         "online": false,
         "private_settings": {
@@ -55,6 +58,6 @@
             }
         },
         "role": "admin",
-        "updated_at": "2024-08-29T18:09:28.42841Z"
+        "updated_at": "2024-10-25T01:26:44.215389Z"
     }
 }
