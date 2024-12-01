@@ -1,36 +1,39 @@
 {
-    "channel_id": "62291f0a-67f7-11ef-bc15-c6eef6ed0640",
+    "channel_id": "50676886-af7c-11ef-90b2-62ecd2772e64",
+    "channel_last_message_at": "2024-12-01T00:36:36.270911Z",
     "channel_type": "messaging",
-    "cid": "messaging:62291f0a-67f7-11ef-bc15-c6eef6ed0640",
-    "created_at": "2024-09-01T00:16:11.551696085Z",
+    "cid": "messaging:50676886-af7c-11ef-90b2-62ecd2772e64",
+    "created_at": "2024-12-01T00:36:36.52750461Z",
     "message": {
         "attachments": [],
-        "cid": "messaging:62291f0a-67f7-11ef-bc15-c6eef6ed0640",
-        "created_at": "2024-09-01T00:16:11.276243Z",
+        "cid": "messaging:50676886-af7c-11ef-90b2-62ecd2772e64",
+        "created_at": "2024-12-01T00:36:36.270911Z",
         "deleted_reply_count": 0,
         "html": "<p>Test</p>\n",
-        "id": "638e6710-67f7-11ef-bc15-c6eef6ed0640",
+        "id": "51b2a3d6-af7c-11ef-90b2-62ecd2772e64",
         "latest_reactions": [
             {
-                "created_at": "2024-09-01T00:16:11.531837Z",
-                "message_id": "638e6710-67f7-11ef-bc15-c6eef6ed0640",
+                "created_at": "2024-12-01T00:36:36.510566Z",
+                "message_id": "51b2a3d6-af7c-11ef-90b2-62ecd2772e64",
                 "score": 1,
                 "type": "like",
-                "updated_at": "2024-09-01T00:16:11.531837Z",
+                "updated_at": "2024-12-01T00:36:36.510566Z",
                 "user": {
                     "banned": false,
                     "birthland": "Tatooine",
                     "created_at": "2024-04-04T09:26:11.805899Z",
                     "id": "luke_skywalker",
                     "image": "https://vignette.wikia.nocookie.net/starwars/images/2/20/LukeTLJ.jpg",
-                    "language": "fr",
-                    "last_active": "2024-09-01T00:16:06.991601863Z",
+                    "language": "en",
+                    "last_active": "2024-12-01T00:36:32.967173877Z",
+                    "last_engaged_at": "2024-11-29T00:00:15.675864Z",
                     "name": "Luke Skywalker",
                     "online": true,
-                    "role": "admin",
+                    "pando": "{\"speciality\":\"ios engineer\"}",
+                    "role": "user",
                     "team": "test",
                     "type": "team",
-                    "updated_at": "2024-08-29T10:37:09.068681Z"
+                    "updated_at": "2024-11-27T08:34:52.738343Z"
                 },
                 "user_id": "luke_skywalker"
             }
@@ -47,8 +50,8 @@
         "reaction_groups": {
             "like": {
                 "count": 1,
-                "first_reaction_at": "2024-09-01T00:16:11.531837Z",
-                "last_reaction_at": "2024-09-01T00:16:11.531837Z",
+                "first_reaction_at": "2024-12-01T00:36:36.510566Z",
+                "last_reaction_at": "2024-12-01T00:36:36.510566Z",
                 "sum_scores": 1
             }
         },
@@ -60,43 +63,47 @@
         "silent": false,
         "text": "Test",
         "type": "regular",
-        "updated_at": "2024-09-01T00:16:11.543157Z",
+        "updated_at": "2024-12-01T00:36:36.517389Z",
         "user": {
             "banned": false,
             "birthland": "Tatooine",
             "created_at": "2024-04-04T09:26:11.805899Z",
             "id": "luke_skywalker",
             "image": "https://vignette.wikia.nocookie.net/starwars/images/2/20/LukeTLJ.jpg",
-            "language": "fr",
-            "last_active": "2024-09-01T00:16:06.991601863Z",
+            "language": "en",
+            "last_active": "2024-12-01T00:36:32.967173877Z",
+            "last_engaged_at": "2024-11-29T00:00:15.675864Z",
             "name": "Luke Skywalker",
             "online": true,
-            "role": "admin",
+            "pando": "{\"speciality\":\"ios engineer\"}",
+            "role": "user",
             "team": "test",
             "type": "team",
-            "updated_at": "2024-08-29T10:37:09.068681Z"
+            "updated_at": "2024-11-27T08:34:52.738343Z"
         }
     },
     "reaction": {
-        "created_at": "2024-09-01T00:16:11.531837Z",
-        "message_id": "638e6710-67f7-11ef-bc15-c6eef6ed0640",
+        "created_at": "2024-12-01T00:36:36.510566Z",
+        "message_id": "51b2a3d6-af7c-11ef-90b2-62ecd2772e64",
         "score": 1,
         "type": "like",
-        "updated_at": "2024-09-01T00:16:11.531837Z",
+        "updated_at": "2024-12-01T00:36:36.510566Z",
         "user": {
             "banned": false,
             "birthland": "Tatooine",
             "created_at": "2024-04-04T09:26:11.805899Z",
             "id": "luke_skywalker",
             "image": "https://vignette.wikia.nocookie.net/starwars/images/2/20/LukeTLJ.jpg",
-            "language": "fr",
-            "last_active": "2024-09-01T00:16:06.991601863Z",
+            "language": "en",
+            "last_active": "2024-12-01T00:36:32.967173877Z",
+            "last_engaged_at": "2024-11-29T00:00:15.675864Z",
             "name": "Luke Skywalker",
             "online": true,
-            "role": "admin",
+            "pando": "{\"speciality\":\"ios engineer\"}",
+            "role": "user",
             "team": "test",
             "type": "team",
-            "updated_at": "2024-08-29T10:37:09.068681Z"
+            "updated_at": "2024-11-27T08:34:52.738343Z"
         },
         "user_id": "luke_skywalker"
     },
@@ -107,13 +114,15 @@
         "created_at": "2024-04-04T09:26:11.805899Z",
         "id": "luke_skywalker",
         "image": "https://vignette.wikia.nocookie.net/starwars/images/2/20/LukeTLJ.jpg",
-        "language": "fr",
-        "last_active": "2024-09-01T00:16:06.991601863Z",
+        "language": "en",
+        "last_active": "2024-12-01T00:36:32.967173877Z",
+        "last_engaged_at": "2024-11-29T00:00:15.675864Z",
         "name": "Luke Skywalker",
         "online": true,
-        "role": "admin",
+        "pando": "{\"speciality\":\"ios engineer\"}",
+        "role": "user",
         "team": "test",
         "type": "team",
-        "updated_at": "2024-08-29T10:37:09.068681Z"
+        "updated_at": "2024-11-27T08:34:52.738343Z"
     }
 }
