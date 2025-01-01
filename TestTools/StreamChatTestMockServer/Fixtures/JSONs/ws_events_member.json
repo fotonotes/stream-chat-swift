@@ -1,26 +1,30 @@
 {
-    "channel_id": "62291f0a-67f7-11ef-bc15-c6eef6ed0640",
+    "channel_id": "c4ac7d08-c7d7-11ef-ac14-ca08f9476ff8",
+    "channel_last_message_at": "2025-01-01T00:31:43.431805Z",
     "channel_type": "messaging",
-    "cid": "messaging:62291f0a-67f7-11ef-bc15-c6eef6ed0640",
-    "created_at": "2024-09-01T00:16:11.768406088Z",
+    "cid": "messaging:c4ac7d08-c7d7-11ef-ac14-ca08f9476ff8",
+    "created_at": "2025-01-01T00:31:43.895415656Z",
     "member": {
+        "archived_at": null,
         "banned": false,
         "channel_role": "channel_member",
-        "created_at": "2024-09-01T00:16:11.760869Z",
+        "created_at": "2025-01-01T00:31:43.887341Z",
         "notifications_muted": false,
+        "pinned_at": null,
         "role": "admin",
         "shadow_banned": false,
         "status": "member",
-        "updated_at": "2024-09-01T00:16:11.760869Z",
+        "updated_at": "2025-01-01T00:31:43.887341Z",
         "user": {
             "banned": false,
             "birthland": "Polis Massa",
             "created_at": "2024-04-04T09:42:00.68335Z",
             "id": "leia_organa",
             "image": "https://vignette.wikia.nocookie.net/starwars/images/f/fc/Leia_Organa_TLJ.png",
-            "language": "en",
-            "last_active": "2024-08-30T14:16:49.393869Z",
-            "name": "Leia Organa",
+            "language": "ru",
+            "last_active": "2024-12-31T07:04:09.883903Z",
+            "last_engaged_at": "2024-12-31T06:25:39.167646Z",
+            "name": "John Doe",
             "online": false,
             "private_settings": {
                 "readReceipts": {
@@ -31,7 +35,7 @@
                 }
             },
             "role": "admin",
-            "updated_at": "2024-08-29T18:09:28.42841Z"
+            "updated_at": "2024-12-30T05:55:49.436894Z"
         },
         "user_id": "leia_organa"
     },
@@ -42,9 +46,10 @@
         "created_at": "2024-04-04T09:42:00.68335Z",
         "id": "leia_organa",
         "image": "https://vignette.wikia.nocookie.net/starwars/images/f/fc/Leia_Organa_TLJ.png",
-        "language": "en",
-        "last_active": "2024-08-30T14:16:49.393869Z",
-        "name": "Leia Organa",
+        "language": "ru",
+        "last_active": "2024-12-31T07:04:09.883903Z",
+        "last_engaged_at": "2024-12-31T06:25:39.167646Z",
+        "name": "John Doe",
         "online": false,
         "private_settings": {
             "readReceipts": {
@@ -55,6 +60,6 @@
             }
         },
         "role": "admin",
-        "updated_at": "2024-08-29T18:09:28.42841Z"
+        "updated_at": "2024-12-30T05:55:49.436894Z"
     }
 }
