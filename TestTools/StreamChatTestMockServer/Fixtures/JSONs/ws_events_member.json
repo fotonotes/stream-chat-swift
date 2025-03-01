@@ -1,25 +1,30 @@
 {
-    "channel_id": "62291f0a-67f7-11ef-bc15-c6eef6ed0640",
+    "channel_id": "76885404-f634-11ef-a94c-1a3ceb4bea8d",
+    "channel_last_message_at": "2025-03-01T00:31:08.358208Z",
     "channel_type": "messaging",
-    "cid": "messaging:62291f0a-67f7-11ef-bc15-c6eef6ed0640",
-    "created_at": "2024-09-01T00:16:11.768406088Z",
+    "cid": "messaging:76885404-f634-11ef-a94c-1a3ceb4bea8d",
+    "created_at": "2025-03-01T00:31:08.820556602Z",
     "member": {
+        "archived_at": null,
         "banned": false,
         "channel_role": "channel_member",
-        "created_at": "2024-09-01T00:16:11.760869Z",
+        "created_at": "2025-03-01T00:31:08.812665Z",
+        "is_global_banned": false,
         "notifications_muted": false,
+        "pinned_at": null,
         "role": "admin",
         "shadow_banned": false,
         "status": "member",
-        "updated_at": "2024-09-01T00:16:11.760869Z",
+        "updated_at": "2025-03-01T00:31:08.812665Z",
         "user": {
             "banned": false,
             "birthland": "Polis Massa",
             "created_at": "2024-04-04T09:42:00.68335Z",
             "id": "leia_organa",
             "image": "https://vignette.wikia.nocookie.net/starwars/images/f/fc/Leia_Organa_TLJ.png",
-            "language": "en",
-            "last_active": "2024-08-30T14:16:49.393869Z",
+            "language": "ru",
+            "last_active": "2025-02-28T21:20:23.174867Z",
+            "last_engaged_at": "2025-02-28T21:20:23.79467Z",
             "name": "Leia Organa",
             "online": false,
             "private_settings": {
@@ -31,7 +36,7 @@
                 }
             },
             "role": "admin",
-            "updated_at": "2024-08-29T18:09:28.42841Z"
+            "updated_at": "2025-02-20T11:14:21.287666Z"
         },
         "user_id": "leia_organa"
     },
@@ -42,8 +47,9 @@
         "created_at": "2024-04-04T09:42:00.68335Z",
         "id": "leia_organa",
         "image": "https://vignette.wikia.nocookie.net/starwars/images/f/fc/Leia_Organa_TLJ.png",
-        "language": "en",
-        "last_active": "2024-08-30T14:16:49.393869Z",
+        "language": "ru",
+        "last_active": "2025-02-28T21:20:23.174867Z",
+        "last_engaged_at": "2025-02-28T21:20:23.79467Z",
         "name": "Leia Organa",
         "online": false,
         "private_settings": {
@@ -55,6 +61,6 @@
             }
         },
         "role": "admin",
-        "updated_at": "2024-08-29T18:09:28.42841Z"
+        "updated_at": "2025-02-20T11:14:21.287666Z"
     }
 }
