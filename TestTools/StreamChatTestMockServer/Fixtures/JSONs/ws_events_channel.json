@@ -1,6 +1,6 @@
 {
     "channel": {
-        "cid": "messaging:62291f0a-67f7-11ef-bc15-c6eef6ed0640",
+        "cid": "messaging:decb2bae-9e5e-11f0-908c-5684702476a4",
         "config": {
             "automod": "AI",
             "automod_behavior": "block",
@@ -29,6 +29,7 @@
                 }
             ],
             "connect_events": true,
+            "count_messages": true,
             "created_at": "2021-03-01T19:26:18.406502Z",
             "custom_events": true,
             "mark_messages_pending": false,
@@ -41,163 +42,796 @@
             "quotes": true,
             "reactions": true,
             "read_events": true,
-            "reminders": false,
+            "reminders": true,
             "replies": true,
             "search": true,
+            "shared_locations": true,
+            "skip_last_msg_update_for_system_msgs": false,
             "typing_events": true,
-            "updated_at": "2024-06-24T13:04:21.722886Z",
+            "updated_at": "2025-07-28T15:20:21.098826Z",
             "uploads": true,
-            "url_enrichment": true
+            "url_enrichment": true,
+            "user_message_reminders": false
         },
-        "created_at": "2024-09-01T00:16:07.852577Z",
+        "created_at": "2025-10-01T00:37:56.02934Z",
         "created_by": {
+            "avg_response_time": 206619,
             "banned": false,
             "birthland": "Tatooine",
+            "blocked_user_ids": [],
+            "canBeAddedToGroups": true,
+            "canReceiveMessages": false,
             "created_at": "2024-04-04T09:26:11.805899Z",
+            "custom_extra_data_key": true,
+            "devices": [
+                {
+                    "created_at": "2025-09-23T11:14:39.868685Z",
+                    "id": "80dc67313692ff3d512089cd19df179395b298d106b86cd2aedf0edfe1de40cd7caba3025823acccf9173fce2000728459e6751c4c7c96b80415a441d54c690d3f2d1635d26a8d58c0407edff8fcfe34",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-09-22T07:33:07.001628Z",
+                    "id": "8013785658480684ee2a2f523bd4d52d6f2fac5e34283f4765362b4d526e5f374a46a0eeff277aee8d94ca872c4cdce2c021fef9cb1c71a4e5b28bba5481cab79c2ff7f111d4a7488c7a28de76736ba6",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-09-16T07:18:39.830014Z",
+                    "id": "8075f5f2d91f892d2a16de528dea1fae54d63f9d1c09ca18501547ec8b3880c54766e80e0eb8e10920a8545cf5a08f0048adf01c029a17b69fda5dbc8019733fdb5b4923e80d525ca96bd833f02434c5",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-09-15T18:13:06.007999Z",
+                    "id": "804df9f905b9fd1f2c53e160a5f3f1db34490bea2ecb0fdb6aa99d9f407fd67b477079cc403e15b7424927276ac32b113c9820bb569b99a14d60fef0f5ae24804bea0e20be5da6d724f4c3abbf5cd0cb",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-09-15T13:32:20.775357Z",
+                    "id": "8044edf2252ff9f253dada5dbf39f018f454e5bcdaf188501c6d105a4f5740c1872acb619f113596a1cb6f9071667d20e601f134aa0c83db83ce733f458b60c5c1b8712e2808abd4a840ce0347a8ea1a",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-09-13T16:07:49.949311Z",
+                    "id": "80fee24033dcaa2b50911104447c596a7490ff86fa6593eb8f0eaca6c699c951ddad5e39d5ce95d3858d12a0169ab126dec8c4fa4f791a723304bf6c3ee415b0fe67e4dd7422e7af1dc49396442946eb",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-09-11T14:55:25.842429Z",
+                    "id": "a23e236960612858446bc7b0e78152f0d03ff977da16a1beec3d4558b51c3377",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-09-10T11:41:21.991018Z",
+                    "id": "5099d9649e231f5b2743b6fb2bf47e78c530cc82e3bbd05d6d99f833f4367904",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-09-10T10:32:28.865373Z",
+                    "id": "5c1967db91dfc57b32d12728b8ac7410edc325daae78215430319239bb1b9378",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-09-03T04:32:38.333126Z",
+                    "id": "8082e4f123b0f83543d1f7c04920c76ec7d4b4db9d8f2e8ff0cc4daeef338209be72df2b35257cfdb86623c14d241cf1d1f42b78fef01e16052d13b03f75ed135360886f1900d3a0e80e97b268514c77",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-09-02T16:12:13.231524Z",
+                    "id": "802e021f067e90a9be03d142b102c30a871ad7e16b41bf469eab29c1e2f7b480f433802b2a3e6585752c09e44ed9f71d858bb61dad135568caaaefdac4536529d3b43812f2077c95b57ff4483fd1ad26",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-09-02T07:14:39.15913Z",
+                    "id": "8006075492db346334382095f7c068600bfa16f8216628c938b1e9bdb18eae4288cd1567707a67b9868ae4166495d92d1eb9c20b2984a0fc3bc578013bcf05654598b343fa8d3f807e5c296e8ce61dc1",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-09-01T11:36:07.581094Z",
+                    "id": "802eefd1b58c8a23fefe5d181538f0109535ad3c5baabf31f6d7a5f898b8ef0c8386d882aa07c511cf97d28f8291f6f8c46b78d7c6639f5c70f09a69ca6a92aff4d9b007a4f4a89b3ab5b722ffb9c86c",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-08-28T11:02:17.709186Z",
+                    "id": "5c7d0b29710fba33189fb659b1cbc2be3491d4f3c4b399b8afefb8bc920103ec",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-08-27T05:23:02.591215Z",
+                    "id": "8079dec1832d067a951130384525f5de98ae20fe23d131e584c0028b69bdb60aec0a461b19e2b8886e94a479781a115c703bad0e3726f644e12a812d37bdd2b79b2021cd103688a2424bde9c08c9f2f0",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-08-26T15:54:24.98832Z",
+                    "id": "809eb957c901bdbae1f20ee0bebdf84c12b6d3a141ba32b5898e7353a7575ef53f941dba98b544fd7c1a36e10d3b88abe9b65d12b44b2fd93dc4a7a57fa45a79750d8a3106fe0d54b46cebad6ec7cbda",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-08-22T10:41:07.519822Z",
+                    "id": "806541d07bd58f5d897f3cb28994fd47749351fb77f948edb2b140c7c147c21bab5e5f90c6124a138f809cefce008662220436a7031c09224434282393bf76d4ba0f61866ecd5c72807279da20618b0a",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-08-19T00:56:28.078927Z",
+                    "id": "808f6525eea58e6aa49bd81b12abbff5a5e9d5310c626559cc1c306f1b0b08496e27d06c64872046d39edb5c9c89f84f0f8debe6663b54ce1aff83269d13850464ae06d3f293f3d6748b0ebd9a91a2f8",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-08-12T23:25:49.648064Z",
+                    "id": "802e7837a85219bea9972172678578d10f683c085da918b90a56a477f6692ccbb52ff7badf3ece11c1d612afed415347dac1a8acfc1dfa51385e2ea53689d43466c84f729b069f10efff86604bc7c40c",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-08-12T12:58:05.975459Z",
+                    "id": "809409e7859ebfe71a461ead24d36a911eb5cdbab7184f848b45c44b153e65ff15c4be82066a2d768dc7184ab9b3b0c1b3cb7ec1f0819f231a6d09ad64c33dbfb8d1b919d5fda0474d9f29e3cc2940b7",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-08-11T20:11:02.29744Z",
+                    "id": "809065933d06e42d27179dfe7f24ef7c34e74c0898c184cc1de0abd791f0f9d2a1342ad140129c3a26ba7a4f86b3534358475d9964024ff373bc2c705bc2d999cbbe0402af60077fb7af6c1f73295bd7",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-08-08T11:31:24.887765Z",
+                    "id": "803588facf5946ecfe386d4906321b9fe31fe4181b03bffbbfd4b733c4acd00f9046a16f7beeec102e95273d15c95c15a44a2076ba83ad001bbd77ce3810b6465a7ef92fe299da7038b636e762d6150b",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-08-08T09:02:22.655446Z",
+                    "id": "80288d1a4cfe5bc4a1692cf3ef6ce34e20deb1483381847d37ed2ecb99bb019c78979ca447bbf6e983a5fb121c409bcdd2fb2353eaacef08269e7f064eda03253d67a6ddebb15011341804e5b33fbf12",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                },
+                {
+                    "created_at": "2025-08-06T04:35:56.828911Z",
+                    "id": "808756b306a4af9bce790e92be78fe4806e93f83840cb3e23b9a154a68c0cb1b2b92f2fb97e7e258e8621b61dea6d5a86393b052463e13fb82a4613f1950b2bc9a3db225d01c4b701e252e8f2a82dae2",
+                    "push_provider": "apn",
+                    "push_provider_name": "APN-Configuration",
+                    "user_id": "luke_skywalker"
+                }
+            ],
             "id": "luke_skywalker",
             "image": "https://vignette.wikia.nocookie.net/starwars/images/2/20/LukeTLJ.jpg",
-            "language": "fr",
-            "last_active": "2024-09-01T00:16:06.991601863Z",
+            "invisible": false,
+            "language": "en",
+            "last_active": "2025-10-01T00:37:54.4519193Z",
             "name": "Luke Skywalker",
             "online": true,
+            "pando": "{\"speciality\":\"ios engineer\"}",
+            "privacy_settings": {
+                "read_receipts": {
+                    "enabled": true
+                },
+                "typing_indicators": {
+                    "enabled": true
+                }
+            },
             "role": "admin",
+            "shadow_banned": false,
             "team": "test",
+            "teams": [],
             "type": "team",
-            "updated_at": "2024-08-29T10:37:09.068681Z"
+            "updated_at": "2025-09-15T05:51:41.748915Z"
         },
         "disabled": false,
         "frozen": false,
-        "id": "62291f0a-67f7-11ef-bc15-c6eef6ed0640",
-        "last_message_at": "2024-09-01T00:16:11.276243Z",
-        "member_count": 4,
+        "id": "decb2bae-9e5e-11f0-908c-5684702476a4",
+        "last_message_at": "2025-10-01T00:37:58.652066Z",
+        "member_count": 3,
         "members": [
             {
                 "banned": false,
                 "channel_role": "channel_member",
-                "created_at": "2024-09-01T00:16:07.874942Z",
+                "created_at": "2025-10-01T00:37:56.03302Z",
                 "notifications_muted": false,
                 "role": "member",
                 "shadow_banned": false,
                 "status": "member",
-                "updated_at": "2024-09-01T00:16:07.874942Z",
+                "updated_at": "2025-10-01T00:37:56.03302Z",
                 "user": {
+                    "avg_response_time": 531,
                     "banned": false,
                     "birthland": "Serenno",
+                    "blocked_user_ids": [],
                     "created_at": "2024-04-22T06:42:08.562992Z",
+                    "devices": [
+                        {
+                            "created_at": "2025-04-23T12:48:04.255103Z",
+                            "id": "805ea3d297c8b6ec3c9d8178bb7c004203cca68ba416b9d3fc7c6266cc92bfee01c1551baff10bf69fc6d357ae249f620eb7ce9d62159d46f27b8557bb1f9a1c258826cf01f06f2752fe87fc332fb8b4",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "count_dooku"
+                        },
+                        {
+                            "created_at": "2025-04-13T16:47:57.568822Z",
+                            "id": "80c5a6b6e6b8470c8631b25d398d68b04c218c5806cdc8a62893c1b96acb3382623f277bbbefe5e0b6f17f6b221627140037dad8c8bed5eca8eaebe00f9353627eaf6253bed1c72352b1f7c30e3af5d1",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "count_dooku"
+                        },
+                        {
+                            "created_at": "2025-03-09T01:21:58.729901Z",
+                            "id": "e76ad8caaa243d1df1487b27cf0d2ee454f21709b6b69c51e6fbee3702abd721",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "count_dooku"
+                        },
+                        {
+                            "created_at": "2025-03-03T09:55:46.384028Z",
+                            "id": "806dd79d6620247dec1bcd0c112be289334fc19db6d102bddbb1f9cc6073ea25d01786ba87a507665216f6a8bcaeaf828c2358374d5b98370423856f1832351676ed828bc6a398c4f79b0d3e4e837a4b",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "count_dooku"
+                        },
+                        {
+                            "created_at": "2025-01-14T21:47:18.084094Z",
+                            "id": "5ee2184dcd7c5ebbf17a0b8b820e7f70397adc2529a75a92a0d0817d8c49cbfb",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "count_dooku"
+                        },
+                        {
+                            "created_at": "2024-12-03T08:41:04.105631Z",
+                            "id": "3b3a27f98aea406a49063e2125ae166b3f63b286a208c2b0dbb2b78947dedb4e",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "count_dooku"
+                        },
+                        {
+                            "created_at": "2024-11-21T22:22:25.955984Z",
+                            "id": "8f5bb77dd2a862b4312af6ba284df39fd50d77896e096fe35813a0a3bae14c14",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "count_dooku"
+                        },
+                        {
+                            "created_at": "2024-11-18T12:05:39.54754Z",
+                            "id": "80d1e3e76b250d7d63364f2d85bc47850655b95e9bb3d082a1eb2b613466c1c4b593f6ebd1957edfb00046bd9db7ae3f56a0fe52e62da55e69e328361a1279fb6bb6b416eb2ebadca40ee7d5a8064931",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "count_dooku"
+                        },
+                        {
+                            "created_at": "2024-11-07T07:15:14.198046Z",
+                            "id": "a07e4a466e6a4b93367cac7782051521d3235a54f6caab8fb4058d7ca0b5b9f3",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "count_dooku"
+                        },
+                        {
+                            "created_at": "2024-09-04T20:41:14.087342Z",
+                            "id": "9dc9815891580982a1381fce4bdb7ba26bb2b0744cbddaa0fe3c0fd56e96f28b",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "count_dooku"
+                        },
+                        {
+                            "created_at": "2024-07-11T05:45:57.533093Z",
+                            "id": "801f28973e47ebdd8afcb814c8af30b95d44bdfe46253281a0bc7ad45737e484b714240ac6ac132f5f64223e92a3a135e3b7f3017ae819c47c03fc082f7d9829333d5c2dc72ca8f9d78925f152abde26",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "count_dooku"
+                        }
+                    ],
                     "id": "count_dooku",
                     "image": "https://vignette.wikia.nocookie.net/starwars/images/b/b8/Dooku_Headshot.jpg",
-                    "last_active": "2024-08-08T21:34:35.577641Z",
+                    "invisible": false,
+                    "language": "",
+                    "last_active": "2025-09-10T09:29:01.56117Z",
                     "name": "Count Dooku",
                     "online": false,
+                    "privacy_settings": {
+                        "read_receipts": {
+                            "enabled": true
+                        },
+                        "typing_indicators": {
+                            "enabled": true
+                        }
+                    },
                     "role": "user",
-                    "updated_at": "2024-07-11T05:45:57.296628Z"
+                    "shadow_banned": false,
+                    "teams": [],
+                    "updated_at": "2025-04-23T13:02:29.974824Z"
                 },
                 "user_id": "count_dooku"
             },
             {
                 "banned": false,
                 "channel_role": "channel_member",
-                "created_at": "2024-09-01T00:16:07.874942Z",
-                "notifications_muted": false,
-                "role": "member",
-                "shadow_banned": false,
-                "status": "member",
-                "updated_at": "2024-09-01T00:16:07.874942Z",
-                "user": {
-                    "banned": false,
-                    "birthland": "Corellia",
-                    "created_at": "2024-04-04T09:18:11.060737Z",
-                    "id": "han_solo",
-                    "image": "https://vignette.wikia.nocookie.net/starwars/images/e/e2/TFAHanSolo.png",
-                    "last_active": "2024-08-31T15:48:09.744514Z",
-                    "name": "Han Solo",
-                    "online": false,
-                    "role": "user",
-                    "updated_at": "2024-06-25T14:17:08.295189Z"
-                },
-                "user_id": "han_solo"
-            },
-            {
-                "banned": false,
-                "channel_role": "channel_member",
-                "created_at": "2024-09-01T00:16:07.874942Z",
+                "created_at": "2025-10-01T00:37:56.03302Z",
                 "notifications_muted": false,
                 "role": "owner",
                 "shadow_banned": false,
                 "status": "member",
-                "updated_at": "2024-09-01T00:16:07.874942Z",
+                "updated_at": "2025-10-01T00:37:56.03302Z",
                 "user": {
+                    "avg_response_time": 206619,
                     "banned": false,
                     "birthland": "Tatooine",
+                    "blocked_user_ids": [],
+                    "canBeAddedToGroups": true,
+                    "canReceiveMessages": false,
                     "created_at": "2024-04-04T09:26:11.805899Z",
+                    "custom_extra_data_key": true,
+                    "devices": [
+                        {
+                            "created_at": "2025-09-23T11:14:39.868685Z",
+                            "id": "80dc67313692ff3d512089cd19df179395b298d106b86cd2aedf0edfe1de40cd7caba3025823acccf9173fce2000728459e6751c4c7c96b80415a441d54c690d3f2d1635d26a8d58c0407edff8fcfe34",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-09-22T07:33:07.001628Z",
+                            "id": "8013785658480684ee2a2f523bd4d52d6f2fac5e34283f4765362b4d526e5f374a46a0eeff277aee8d94ca872c4cdce2c021fef9cb1c71a4e5b28bba5481cab79c2ff7f111d4a7488c7a28de76736ba6",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-09-16T07:18:39.830014Z",
+                            "id": "8075f5f2d91f892d2a16de528dea1fae54d63f9d1c09ca18501547ec8b3880c54766e80e0eb8e10920a8545cf5a08f0048adf01c029a17b69fda5dbc8019733fdb5b4923e80d525ca96bd833f02434c5",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-09-15T18:13:06.007999Z",
+                            "id": "804df9f905b9fd1f2c53e160a5f3f1db34490bea2ecb0fdb6aa99d9f407fd67b477079cc403e15b7424927276ac32b113c9820bb569b99a14d60fef0f5ae24804bea0e20be5da6d724f4c3abbf5cd0cb",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-09-15T13:32:20.775357Z",
+                            "id": "8044edf2252ff9f253dada5dbf39f018f454e5bcdaf188501c6d105a4f5740c1872acb619f113596a1cb6f9071667d20e601f134aa0c83db83ce733f458b60c5c1b8712e2808abd4a840ce0347a8ea1a",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-09-13T16:07:49.949311Z",
+                            "id": "80fee24033dcaa2b50911104447c596a7490ff86fa6593eb8f0eaca6c699c951ddad5e39d5ce95d3858d12a0169ab126dec8c4fa4f791a723304bf6c3ee415b0fe67e4dd7422e7af1dc49396442946eb",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-09-11T14:55:25.842429Z",
+                            "id": "a23e236960612858446bc7b0e78152f0d03ff977da16a1beec3d4558b51c3377",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-09-10T11:41:21.991018Z",
+                            "id": "5099d9649e231f5b2743b6fb2bf47e78c530cc82e3bbd05d6d99f833f4367904",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-09-10T10:32:28.865373Z",
+                            "id": "5c1967db91dfc57b32d12728b8ac7410edc325daae78215430319239bb1b9378",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-09-03T04:32:38.333126Z",
+                            "id": "8082e4f123b0f83543d1f7c04920c76ec7d4b4db9d8f2e8ff0cc4daeef338209be72df2b35257cfdb86623c14d241cf1d1f42b78fef01e16052d13b03f75ed135360886f1900d3a0e80e97b268514c77",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-09-02T16:12:13.231524Z",
+                            "id": "802e021f067e90a9be03d142b102c30a871ad7e16b41bf469eab29c1e2f7b480f433802b2a3e6585752c09e44ed9f71d858bb61dad135568caaaefdac4536529d3b43812f2077c95b57ff4483fd1ad26",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-09-02T07:14:39.15913Z",
+                            "id": "8006075492db346334382095f7c068600bfa16f8216628c938b1e9bdb18eae4288cd1567707a67b9868ae4166495d92d1eb9c20b2984a0fc3bc578013bcf05654598b343fa8d3f807e5c296e8ce61dc1",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-09-01T11:36:07.581094Z",
+                            "id": "802eefd1b58c8a23fefe5d181538f0109535ad3c5baabf31f6d7a5f898b8ef0c8386d882aa07c511cf97d28f8291f6f8c46b78d7c6639f5c70f09a69ca6a92aff4d9b007a4f4a89b3ab5b722ffb9c86c",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-08-28T11:02:17.709186Z",
+                            "id": "5c7d0b29710fba33189fb659b1cbc2be3491d4f3c4b399b8afefb8bc920103ec",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-08-27T05:23:02.591215Z",
+                            "id": "8079dec1832d067a951130384525f5de98ae20fe23d131e584c0028b69bdb60aec0a461b19e2b8886e94a479781a115c703bad0e3726f644e12a812d37bdd2b79b2021cd103688a2424bde9c08c9f2f0",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-08-26T15:54:24.98832Z",
+                            "id": "809eb957c901bdbae1f20ee0bebdf84c12b6d3a141ba32b5898e7353a7575ef53f941dba98b544fd7c1a36e10d3b88abe9b65d12b44b2fd93dc4a7a57fa45a79750d8a3106fe0d54b46cebad6ec7cbda",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-08-22T10:41:07.519822Z",
+                            "id": "806541d07bd58f5d897f3cb28994fd47749351fb77f948edb2b140c7c147c21bab5e5f90c6124a138f809cefce008662220436a7031c09224434282393bf76d4ba0f61866ecd5c72807279da20618b0a",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-08-19T00:56:28.078927Z",
+                            "id": "808f6525eea58e6aa49bd81b12abbff5a5e9d5310c626559cc1c306f1b0b08496e27d06c64872046d39edb5c9c89f84f0f8debe6663b54ce1aff83269d13850464ae06d3f293f3d6748b0ebd9a91a2f8",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-08-12T23:25:49.648064Z",
+                            "id": "802e7837a85219bea9972172678578d10f683c085da918b90a56a477f6692ccbb52ff7badf3ece11c1d612afed415347dac1a8acfc1dfa51385e2ea53689d43466c84f729b069f10efff86604bc7c40c",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-08-12T12:58:05.975459Z",
+                            "id": "809409e7859ebfe71a461ead24d36a911eb5cdbab7184f848b45c44b153e65ff15c4be82066a2d768dc7184ab9b3b0c1b3cb7ec1f0819f231a6d09ad64c33dbfb8d1b919d5fda0474d9f29e3cc2940b7",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-08-11T20:11:02.29744Z",
+                            "id": "809065933d06e42d27179dfe7f24ef7c34e74c0898c184cc1de0abd791f0f9d2a1342ad140129c3a26ba7a4f86b3534358475d9964024ff373bc2c705bc2d999cbbe0402af60077fb7af6c1f73295bd7",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-08-08T11:31:24.887765Z",
+                            "id": "803588facf5946ecfe386d4906321b9fe31fe4181b03bffbbfd4b733c4acd00f9046a16f7beeec102e95273d15c95c15a44a2076ba83ad001bbd77ce3810b6465a7ef92fe299da7038b636e762d6150b",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-08-08T09:02:22.655446Z",
+                            "id": "80288d1a4cfe5bc4a1692cf3ef6ce34e20deb1483381847d37ed2ecb99bb019c78979ca447bbf6e983a5fb121c409bcdd2fb2353eaacef08269e7f064eda03253d67a6ddebb15011341804e5b33fbf12",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        },
+                        {
+                            "created_at": "2025-08-06T04:35:56.828911Z",
+                            "id": "808756b306a4af9bce790e92be78fe4806e93f83840cb3e23b9a154a68c0cb1b2b92f2fb97e7e258e8621b61dea6d5a86393b052463e13fb82a4613f1950b2bc9a3db225d01c4b701e252e8f2a82dae2",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "luke_skywalker"
+                        }
+                    ],
                     "id": "luke_skywalker",
                     "image": "https://vignette.wikia.nocookie.net/starwars/images/2/20/LukeTLJ.jpg",
-                    "language": "fr",
-                    "last_active": "2024-09-01T00:16:06.991601863Z",
+                    "invisible": false,
+                    "language": "en",
+                    "last_active": "2025-10-01T00:37:54.4519193Z",
                     "name": "Luke Skywalker",
                     "online": true,
+                    "pando": "{\"speciality\":\"ios engineer\"}",
+                    "privacy_settings": {
+                        "read_receipts": {
+                            "enabled": true
+                        },
+                        "typing_indicators": {
+                            "enabled": true
+                        }
+                    },
                     "role": "admin",
+                    "shadow_banned": false,
                     "team": "test",
+                    "teams": [],
                     "type": "team",
-                    "updated_at": "2024-08-29T10:37:09.068681Z"
+                    "updated_at": "2025-09-15T05:51:41.748915Z"
                 },
                 "user_id": "luke_skywalker"
             },
             {
                 "banned": false,
                 "channel_role": "channel_member",
-                "created_at": "2024-09-01T00:16:11.760869Z",
+                "created_at": "2025-10-01T00:37:59.147029Z",
                 "notifications_muted": false,
                 "role": "admin",
                 "shadow_banned": false,
                 "status": "member",
-                "updated_at": "2024-09-01T00:16:11.760869Z",
+                "updated_at": "2025-10-01T00:37:59.147029Z",
                 "user": {
+                    "avg_response_time": 683369,
                     "banned": false,
                     "birthland": "Polis Massa",
+                    "blocked_user_ids": [],
                     "created_at": "2024-04-04T09:42:00.68335Z",
+                    "devices": [
+                        {
+                            "created_at": "2025-09-29T15:50:48.713725Z",
+                            "id": "ff2dc6e49c2663ff99b3a5e2a1dc8bf779a263c851f2dad3dc06270145fd1bbd",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-09-29T15:45:47.161603Z",
+                            "id": "80dd487e64eaa485e278fac0aef4582a0880e661a87b4db65ee3d39bb15b9817c22d1408d1e596cc3c904cd646da8a93fdb3b754ac52d6296f9b92ab840294edd7cc21918581828f42a7d49490745cbb",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-09-18T15:47:58.59061Z",
+                            "id": "14216b28af8556468ae8dbf08a5ea602f9deb9c2eb115d9b6aacf7f7bde74ade",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-09-08T17:54:15.751885Z",
+                            "id": "80fc30257c03c5a273df381a64d9e168a94ca4cc5c44d82f6e9b27f94f6f5de710a08d7baa9a83fe41a72366c446eaba3c148273ef7b66f15c6e6ed21e20e068c45df62d18ab7680e91a076bb325fce7",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-08-11T16:11:18.370465Z",
+                            "id": "8069590860c9e5916eb07b8b91e475e62b217956b48d88ad0490fc6b1bc49225179305ab4033de984081e80989fc5959e0b1aff07e6220b46543f47c46ba3f1adfebbfbe68cdf0e91c802db6ccc1e34f",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-07-29T15:46:00.608151Z",
+                            "id": "8038e9ddae90ad612073cccda59c8e715193e375185a4c96cc374b12bf3b74d8bdcc4016ad13c5e48544a4606c82e874809a13322acdd03b4a4e9fd4ccfc5704aa183fd1cc12481b3a9d83e630e8adfe",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-07-27T10:22:24.684004Z",
+                            "id": "806c802cfe521f2980a80135de1e2c18dff2d634ab770bf6b645014a5da1f01047ff66c9933c83a8c5a464f5eb00e4d34a8bc02addc27f93aa24dd7f56c92e272e15d9f6d9beca620d08c93f80e01fe3",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-07-04T15:29:30.008558Z",
+                            "id": "8043c6d0aeff8f1223f3c516e40e520c378e2ede462f06d215b630367d81f7b103181bb31f74ab23e37fe1f8686480f54eb31b2c560cac5ee18daa5558981c7f25465733563afc8050ecb7035be93ea7",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-07-04T13:17:05.176311Z",
+                            "id": "80b164164bc6eedba4a8c4d606d1e92b965facaa019aa89d81eaf7ed2579c4128e3ad7dff7a26dbba507ef75f79260d8acd86a26ce53a48efb83216045e8d9ed0eccd716fcd1807e381169a3f68f5f2e",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-06-23T12:39:52.733646Z",
+                            "id": "80c3ed5bdc76358518c9ef3707c00a4046848575a3ecc6f5f0fc9e67cf5823dd17e3784464aa6fc2a9640ec7e4f6eb6b7be3a4a9858857cda94fce3f6b3af907c1a68c19052302a4d07c5eeacbad1d0d",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-06-18T03:58:29.477347Z",
+                            "id": "7b7bf6129032c5c3c333f2f80d8939d914587a11aaa30953af5e63d89d9defa1",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-05-02T18:24:07.641188Z",
+                            "id": "807146c48063da5e10a127367fa5b54103c9b61e0f95576a485d6289681490a92bef0a3d59c4ca33fcd7eef7ce339463603221f39d7ef5109aebd80cd647942efc31e8a5d2e4c03f7e2af6d0e3b0db4b",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-04-29T18:11:54.744459Z",
+                            "id": "5dd2129704b206673f40fcacc51498af12466d202fb7b86fbcd1def5e021743b",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-04-25T04:57:05.059816Z",
+                            "id": "80416524327191703aa5704a6788f5b85b6b38cb8de437675da7883c1a61b4b479fc20426200dd366c45b972948046a258d95d3331d4fc694e17c491ba671b209792b4df54e58907cdca208e58ffbd66",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-04-24T16:27:51.309408Z",
+                            "id": "de52baf21c547d06ce71f54f5ef8a47693c9b9f194dd6e82e1c855803eaacc4d",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-04-15T19:38:32.316517Z",
+                            "id": "8babc49a1d5e8943a25291fd4c2606f6d8f38470693daf7628a9a9c8617ea313",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-04-07T13:06:09.56915Z",
+                            "id": "80390cd4b5322ce878abb0ea8c6f2f554d21f2233767b61b4eb3a916e0be7325bc225528ffd97e3503ac6a56c5a62b747150b0d44abbeb6fb8c8e8b2dbf7fbe4291f3dbcac257ab869a6046876db1289",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-04-06T04:27:36.245492Z",
+                            "id": "f71e38ca56a6625256d487331369e2b950219fd0d55e8d7cb82fbd88966fee65",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-04-04T23:27:03.99699Z",
+                            "id": "809855cbb448059e832d627031ae978b9bb37f323b1ad0b3b0b879e4437cdc20",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-03-27T01:06:37.823489Z",
+                            "id": "92045b8b37f75e4c36ed74665f68ebf4d932c19acd2a02d0c3604230a44a9537",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-02-20T11:33:28.513905Z",
+                            "id": "80f13fec122f492c20a9dc11bb7003a1e870fb75de24890568c0fb5e3b7365331618227d89162b7322e9b68b20a0b02a42d6b8bf9923091d34492a1375dc781026cd9845b6b561a0d284cbc77b5bdc39",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-02-06T05:12:00.670052Z",
+                            "id": "80c9f99c1d02347ba3599ab752e55308681244fe97fcbc95eb0e630bcd97cb3ee927e8b15d5085938b4b18246f2e9ba2de3f357a6ca9127b1971df14742725841f0fd8537233b5e43a07a24422411816",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        },
+                        {
+                            "created_at": "2025-02-05T14:25:05.737649Z",
+                            "id": "8099cf56e010eb7a7ec2202eacffbc22c0d84b2c3007b9b45403f4f99fd42b670d6552521aea4c14263fd0ed0d034f2e3f25aa44145a4054ed7d067e25e2f221582d30de66f750e62e45e2c0fa73ed74",
+                            "push_provider": "apn",
+                            "push_provider_name": "APN-Configuration",
+                            "user_id": "leia_organa"
+                        }
+                    ],
                     "id": "leia_organa",
                     "image": "https://vignette.wikia.nocookie.net/starwars/images/f/fc/Leia_Organa_TLJ.png",
-                    "language": "en",
-                    "last_active": "2024-08-30T14:16:49.393869Z",
+                    "invisible": false,
+                    "is_moderator": true,
+                    "language": "",
+                    "last_active": "2025-09-30T15:18:16.141127Z",
                     "name": "Leia Organa",
                     "online": false,
-                    "private_settings": {
-                        "readReceipts": {
-                            "enabled": false
+                    "privacy_settings": {
+                        "read_receipts": {
+                            "enabled": true
                         },
-                        "typingIndicators": {
-                            "enabled": false
+                        "typing_indicators": {
+                            "enabled": true
                         }
                     },
                     "role": "admin",
-                    "updated_at": "2024-08-29T18:09:28.42841Z"
+                    "shadow_banned": false,
+                    "teams": [],
+                    "updated_at": "2025-09-29T17:45:51.64375Z"
                 },
                 "user_id": "leia_organa"
             }
         ],
+        "message_count": 1,
         "name": "Sync Mock Server",
         "type": "messaging",
-        "updated_at": "2024-09-01T00:16:07.852577Z"
+        "updated_at": "2025-10-01T00:37:56.02934Z"
     },
-    "channel_id": "62291f0a-67f7-11ef-bc15-c6eef6ed0640",
+    "channel_id": "decb2bae-9e5e-11f0-908c-5684702476a4",
+    "channel_member_count": 3,
     "channel_type": "messaging",
-    "cid": "messaging:62291f0a-67f7-11ef-bc15-c6eef6ed0640",
-    "created_at": "2024-09-01T00:16:11.772933273Z",
+    "cid": "messaging:decb2bae-9e5e-11f0-908c-5684702476a4",
+    "created_at": "2025-10-01T00:37:59.167155654Z",
     "type": "channel.updated",
     "user": {
+        "avg_response_time": 206619,
         "banned": false,
         "birthland": "Tatooine",
+        "blocked_user_ids": [],
+        "canBeAddedToGroups": true,
+        "canReceiveMessages": false,
         "created_at": "2024-04-04T09:26:11.805899Z",
+        "custom_extra_data_key": true,
         "id": "luke_skywalker",
         "image": "https://vignette.wikia.nocookie.net/starwars/images/2/20/LukeTLJ.jpg",
-        "language": "fr",
-        "last_active": "2024-09-01T00:16:06.991601863Z",
+        "language": "en",
+        "last_active": "2025-10-01T00:37:54.4519193Z",
         "name": "Luke Skywalker",
         "online": true,
+        "pando": "{\"speciality\":\"ios engineer\"}",
+        "privacy_settings": {
+            "read_receipts": {
+                "enabled": false
+            },
+            "typing_indicators": {
+                "enabled": false
+            }
+        },
         "role": "admin",
         "team": "test",
+        "teams": [],
         "type": "team",
-        "updated_at": "2024-08-29T10:37:09.068681Z"
+        "updated_at": "2025-09-15T05:51:41.748915Z"
     }
 }
