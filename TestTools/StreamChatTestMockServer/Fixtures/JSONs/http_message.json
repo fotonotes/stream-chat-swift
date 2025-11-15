@@ -1,13 +1,16 @@
 {
-    "duration": "1578.86ms",
+    "duration": "100.75ms",
     "message": {
         "attachments": [],
-        "cid": "messaging:62291f0a-67f7-11ef-bc15-c6eef6ed0640",
-        "created_at": "2024-09-01T00:16:11.276243Z",
+        "cid": "messaging:db5945e4-c1ba-11f0-8725-2eb1246314a4",
+        "created_at": "2025-11-15T00:34:35.982827Z",
         "deleted_reply_count": 0,
         "html": "<p>Test</p>\n",
-        "id": "638e6710-67f7-11ef-bc15-c6eef6ed0640",
+        "id": "dc9fb4f6-c1ba-11f0-8725-2eb1246314a4",
         "latest_reactions": [],
+        "member": {
+            "channel_role": "channel_member"
+        },
         "mentioned_users": [],
         "own_reactions": [],
         "pin_expires": null,
@@ -17,27 +20,34 @@
         "reaction_counts": {},
         "reaction_scores": {},
         "reply_count": 0,
+        "restricted_visibility": [],
         "shadowed": false,
         "silent": false,
         "text": "Test",
         "type": "regular",
-        "updated_at": "2024-09-01T00:16:11.276243Z",
+        "updated_at": "2025-11-15T00:34:35.982827Z",
         "user": {
+            "avg_response_time": 171857,
             "banned": false,
+            "birthLand": "Tatooine",
             "birthland": "Tatooine",
             "blocked_user_ids": [],
+            "canBeAddedToGroups": true,
+            "canReceiveMessages": false,
             "created_at": "2024-04-04T09:26:11.805899Z",
+            "custom_extra_data_key": true,
             "id": "luke_skywalker",
             "image": "https://vignette.wikia.nocookie.net/starwars/images/2/20/LukeTLJ.jpg",
-            "language": "fr",
-            "last_active": "2024-09-01T00:16:08.037217752Z",
+            "language": "en",
+            "last_active": "2025-11-15T00:34:33.497694022Z",
             "name": "Luke Skywalker",
             "online": true,
+            "pando": "{\"speciality\":\"ios engineer\"}",
             "role": "admin",
             "team": "test",
             "teams": [],
             "type": "team",
-            "updated_at": "2024-08-29T10:37:09.068681Z"
+            "updated_at": "2025-11-12T08:51:24.640299Z"
         }
     }
 }

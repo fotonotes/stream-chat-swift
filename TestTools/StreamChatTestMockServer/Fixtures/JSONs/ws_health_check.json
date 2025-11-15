@@ -1,21 +1,27 @@
 {
     "cid": "*",
-    "connection_id": "66cc79d8-0a15-1e61-0200-000000000778",
-    "created_at": "2024-09-01T00:16:07.067591173Z",
+    "connection_id": "68e67b7d-0a15-3975-0200-00000000ef75",
+    "created_at": "2025-11-15T00:34:33.527567498Z",
     "me": {
+        "avg_response_time": 171857,
         "banned": false,
+        "birthLand": "Tatooine",
         "birthland": "Tatooine",
+        "canBeAddedToGroups": true,
+        "canReceiveMessages": false,
         "channel_mutes": [],
         "created_at": "2024-04-04T09:26:11.805899Z",
+        "custom_extra_data_key": true,
         "devices": [],
         "id": "luke_skywalker",
         "image": "https://vignette.wikia.nocookie.net/starwars/images/2/20/LukeTLJ.jpg",
         "invisible": false,
-        "language": "fr",
-        "last_active": "2024-09-01T00:16:06.991601863Z",
+        "language": "en",
+        "last_active": "2025-11-15T00:34:33.497694022Z",
         "mutes": [],
         "name": "Luke Skywalker",
         "online": true,
+        "pando": "{\"speciality\":\"ios engineer\"}",
         "privacy_settings": {
             "read_receipts": {
                 "enabled": true
@@ -26,12 +32,13 @@
         },
         "role": "admin",
         "team": "test",
+        "teams": [],
         "total_unread_count": 0,
         "type": "team",
         "unread_channels": 0,
         "unread_count": 0,
-        "unread_threads": 1,
-        "updated_at": "2024-08-29T10:37:09.068681Z"
+        "unread_threads": 0,
+        "updated_at": "2025-11-12T08:51:24.640299Z"
     },
     "type": "health.check"
 }
