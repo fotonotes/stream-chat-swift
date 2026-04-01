@@ -1,13 +1,19 @@
 {
-    "duration": "1578.86ms",
+    "duration": "358.60ms",
     "message": {
         "attachments": [],
-        "cid": "messaging:62291f0a-67f7-11ef-bc15-c6eef6ed0640",
-        "created_at": "2024-09-01T00:16:11.276243Z",
+        "cid": "messaging:6b5a0a50-2d65-11f1-8273-7e504a7ea8a8",
+        "created_at": "2026-04-01T00:55:07.9289Z",
         "deleted_reply_count": 0,
         "html": "<p>Test</p>\n",
-        "id": "638e6710-67f7-11ef-bc15-c6eef6ed0640",
+        "id": "6d5d429a-2d65-11f1-8273-7e504a7ea8a8",
         "latest_reactions": [],
+        "member": {
+            "channel_role": "channel_member",
+            "notifications_muted": false
+        },
+        "mentioned_channel": false,
+        "mentioned_here": false,
         "mentioned_users": [],
         "own_reactions": [],
         "pin_expires": null,
@@ -17,27 +23,34 @@
         "reaction_counts": {},
         "reaction_scores": {},
         "reply_count": 0,
+        "restricted_visibility": [],
         "shadowed": false,
         "silent": false,
         "text": "Test",
         "type": "regular",
-        "updated_at": "2024-09-01T00:16:11.276243Z",
+        "updated_at": "2026-04-01T00:55:07.9289Z",
         "user": {
+            "avg_response_time": 150537,
             "banned": false,
+            "birthLand": "Tatooine",
             "birthland": "Tatooine",
             "blocked_user_ids": [],
+            "canBeAddedToGroups": true,
+            "canReceiveMessages": false,
             "created_at": "2024-04-04T09:26:11.805899Z",
+            "custom_extra_data_key": true,
             "id": "luke_skywalker",
             "image": "https://vignette.wikia.nocookie.net/starwars/images/2/20/LukeTLJ.jpg",
-            "language": "fr",
-            "last_active": "2024-09-01T00:16:08.037217752Z",
+            "language": "zh",
+            "last_active": "2026-04-01T00:55:04.011902848Z",
             "name": "Luke Skywalker",
             "online": true,
+            "pando": "{\"speciality\":\"ios engineer\"}",
             "role": "admin",
             "team": "test",
             "teams": [],
             "type": "team",
-            "updated_at": "2024-08-29T10:37:09.068681Z"
+            "updated_at": "2026-03-30T22:53:49.127251Z"
         }
     }
 }
